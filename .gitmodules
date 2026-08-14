@@ -1,0 +1,12 @@
+[submodule "noxos-os"]
+	path = noxos-os
+	url = https://github.com/parrothacker1/noxos-os.git
+[submodule "noxos-payload"]
+	path = noxos-payload
+	url = https://github.com/parrothacker1/noxos-payload.git
+[submodule "noxos-app"]
+	path = noxos-app
+	url = https://github.com/parrothacker1/noxos-app.git
+[submodule "noxos-server"]
+	path = noxos-server
+	url = https://github.com/parrothacker1/noxos-server.git

@@ -1,0 +1,47 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateSnapshot",
+                "ec2:CreateVolume",
+                "ec2:AttachVolume",
+                "ec2:CreateTags"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeSnapshots",
+                "ec2:DescribeVolumes",
+                "ec2:DescribeInstances",
+                "ec2:DescribeTags",
+                "ec2:DescribeFleets"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:ModifyFleet"
+            ],
+            "Resource": "arn:aws:ec2:us-east-1:139229021586:fleet/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:TerminateInstances",
+                "ec2:StopInstances",
+                "ec2:ModifyInstanceAttribute"
+            ],
+            "Resource": "arn:aws:ec2:us-east-1:139229021586:instance/*",
+            "Condition": {
+                "StringEquals": {
+                    "aws:ResourceTag/Name": "noxos-rom-compile"
+                }
+            }
+        }
+    ]
+}

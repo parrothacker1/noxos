@@ -1,0 +1,81 @@
+{
+  "LaunchTemplateConfigs": [
+    {
+      "LaunchTemplateSpecification": {
+        "LaunchTemplateId": "lt-0b31a12283756a7a3",
+        "Version": "$Latest"
+      },
+      "Overrides": [
+        { "InstanceType": "r5.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r5.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r5.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r5.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r5.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r5.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r5a.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r5a.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r5a.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r5a.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r5a.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r5a.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r5n.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r5n.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r5n.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r5n.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r5n.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r5n.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r5b.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r5b.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r5b.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r5b.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r5b.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r5b.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r6i.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r6i.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r6i.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r6i.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r6i.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r6i.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r6a.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r6a.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r6a.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r6a.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r6a.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r6a.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r6in.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r6in.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r6in.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r6in.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r6in.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r6in.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r7i.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r7i.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r7i.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r7i.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r7i.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r7i.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" },
+        { "InstanceType": "r7a.2xlarge", "SubnetId": "subnet-0004e42788eb9947a" },
+        { "InstanceType": "r7a.2xlarge", "SubnetId": "subnet-03e7810ec05743044" },
+        { "InstanceType": "r7a.2xlarge", "SubnetId": "subnet-0400d54e1b840ca77" },
+        { "InstanceType": "r7a.2xlarge", "SubnetId": "subnet-0a4e0383c066093b1" },
+        { "InstanceType": "r7a.2xlarge", "SubnetId": "subnet-09cd42f9dd6603504" },
+        { "InstanceType": "r7a.2xlarge", "SubnetId": "subnet-04114f5a64aa293b9" }
+      ]
+    }
+  ],
+  "TargetCapacitySpecification": {
+    "TotalTargetCapacity": 1,
+    "DefaultTargetCapacityType": "spot"
+  },
+  "SpotOptions": {
+    "AllocationStrategy": "capacity-optimized",
+    "InstanceInterruptionBehavior": "terminate"
+  },
+  "Type": "maintain",
+  "TagSpecifications": [
+    {
+      "ResourceType": "fleet",
+      "Tags": [{ "Key": "Name", "Value": "noxos-rom-compile" }]
+    }
+  ]
+}

@@ -33,7 +33,7 @@ VOL_TAG_NAME="noxos-aosp-src"
 SNAP_ID=$(aws ec2 describe-snapshots --owner-ids self \
   --filters "Name=tag:Name,Values=$VOL_TAG_NAME" "Name=status,Values=completed" \
   --query 'sort_by(Snapshots,&StartTime)[-1].SnapshotId' --output text)
-USE_VOL=$(aws ec2 create-volume --availability-zone "$AZ" --snapshot-id "$SNAP_ID" \
+USE_VOL=$(aws ec2 create-volume --availability-zone "$AZ" --snapshot-id "$SNAP_ID" --size 500 \
   --volume-type gp3 --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=$VOL_TAG_NAME}]" \
   --query 'VolumeId' --output text)
 aws ec2 wait volume-available --volume-ids "$USE_VOL"
@@ -49,6 +49,7 @@ DEV="/dev/$(lsblk -dno NAME,TYPE | awk '$2=="disk"{print $1}' | grep -v "^${ROOT
 
 mkdir -p /mnt/aosp
 mount "$DEV" /mnt/aosp || { mkfs.ext4 -F "$DEV"; mount "$DEV" /mnt/aosp; }
+resize2fs "$DEV"
 
 git config --global --add safe.directory '*'
 if [ -d /opt/noxos-os/.git ]; then

@@ -84,11 +84,21 @@ exec > /var/log/noxos-build.log 2>&1
 export AWS_DEFAULT_REGION="$REGION"
 export HOME=/root
 
-chown -R ubuntu:ubuntu /mnt/aosp
+if [ "\$(stat -c '%U' /mnt/aosp)" != "ubuntu" ]; then
+  chown -R ubuntu:ubuntu /mnt/aosp
+fi
 rm -f /etc/.repo_gitconfig.json
 
+IMG_ZIP=\$(ls /mnt/aosp/out/dist/*-img-*.zip 2>/dev/null | head -1)
+if [ -e /mnt/aosp/out/dist/cvd-host_package.tar.gz ] && [ -n "\$IMG_ZIP" ]; then
+  ORPHAN_PRODUCT=\$(basename "\$IMG_ZIP" | sed -E 's/-img-.*\.zip\$//')
+  ORPHAN_S3_PREFIX="full/\$(date -u +%Y%m%d)-\${ORPHAN_PRODUCT}"
+  aws s3 cp /mnt/aosp/out/dist/cvd-host_package.tar.gz "s3://$LOG_BUCKET/\$ORPHAN_S3_PREFIX/cvd-host_package.tar.gz" || true
+  aws s3 cp "\$IMG_ZIP" "s3://$LOG_BUCKET/\$ORPHAN_S3_PREFIX/\$(basename "\$IMG_ZIP")" || true
+fi
+
 set +e
-sudo -u ubuntu -H bash -c "cd /mnt/aosp && bash /opt/noxos-os/infra/sync.sh && bash /opt/noxos-os/infra/build.sh"
+sudo -u ubuntu -H bash -c "cd /mnt/aosp && bash /opt/noxos-os/infra/sync.sh && LUNCH_TARGET=noxos_cf_x86_64_phone-trunk_staging-userdebug bash /opt/noxos-os/infra/build.sh"
 BUILD_EXIT=\$?
 set -e
 
@@ -109,10 +119,11 @@ fi
 FLEET_ID=\$(aws ec2 describe-tags --filters "Name=resource-id,Values=$INSTANCE_ID" "Name=key,Values=aws:ec2:fleet-id" \
   --query 'Tags[0].Value' --output text)
 if [ -n "\$FLEET_ID" ] && [ "\$FLEET_ID" != "None" ]; then
-  aws ec2 modify-fleet --fleet-id "\$FLEET_ID" --target-capacity 0 --no-terminate-instances
+  aws ec2 modify-fleet --fleet-id "\$FLEET_ID" --target-capacity-specification TotalTargetCapacity=0 \
+    --excess-capacity-termination-policy no-termination
 fi
 
-aws ec2 create-snapshot --volume-id "$USE_VOL" --description "noxos-aosp-src build-complete snapshot" \
+aws ec2 create-snapshot --volume-id "$USE_VOL" --description "noxos-aosp-src v1 (noxos_cf_x86_64_phone) build-complete snapshot" \
   --tag-specifications "ResourceType=snapshot,Tags=[{Key=Name,Value=$VOL_TAG_NAME}]"
 
 aws ec2 terminate-instances --instance-ids "$INSTANCE_ID"

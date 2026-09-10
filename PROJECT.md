@@ -39,17 +39,19 @@ A companion "audit" app logs every isolated execution (input, output, duration, 
 
 GMS-independent app installation (Aurora Store-style, or microG if the real Play Store app is specifically needed — Play Integrity API will likely reject a custom build for some apps, a known documented limitation). Custom signed OTA images built with AOSP's `ota_from_target_files` tooling (`noxos-os`), published as GitHub Releases, indexed by a static manifest (`noxos-server`) rather than a self-hosted update server — see "OTA distribution" below for why that's static instead of the LineageOS/CalyxOS self-hosted-server pattern.
 
-### OTA distribution (revised 2026-08-16 — supersedes 2026-08-15's GitHub-Releases framing)
+### OTA distribution (revised 2026-09-10 — supersedes 2026-08-16's static-only framing)
 
-Originally scoped as a persistent self-hosted Go server, then revised to GitHub Releases + a static manifest. Revised again: GitHub Releases' 2GB-per-file limit is a real risk for full Android image bundles, so artifacts move to **S3**:
+Originally scoped as a persistent self-hosted Go server, then revised to GitHub Releases + a static manifest, then to S3 + a static manifest (client resolves the update itself against a public JSON file). **Revised again 2026-09-10: the download step becomes a live signing Lambda, the manifest-generation pipeline stays static.** User's framing: the ROM sends its current version, the server figures out what comes next and hands back a signed S3 URL — deliberately kept as v1 scope (bundled multi-version updates, where a single update jumps a device from v1 straight through v3, are v2 scope, not attempted now).
 
 - `s3://noxos-releases/full/` — periodic complete builds, for fresh installs or devices too far out of date to patch forward.
 - `s3://noxos-releases/patches/` — incremental deltas between *consecutive* full releases only, generated via AOSP's `ota_from_target_files -i old.zip new.zip patch.zip`. A patch isn't a separate build artifact — it's a diff computed from two already-built target-files packages.
-- A small JSON manifest tracks available versions and valid patch chains; the on-device updater resolves current→latest as either "apply the single available patch" or "pull the latest full image" if too far behind.
-- **Still no N-hop patch chaining across multiple missed versions** — that constraint from the 08-15 revision holds; only the hosting and single-hop patch generation changed.
-- **No push notifications** — client polls on a schedule instead of FCM (conflicts with GMS-independence) or a self-hosted UnifiedPush relay.
-- **No Lambda / compute-on-request** — no server-side logic yet that would justify it.
-- Signing stays self-controlled regardless of hosting — the "we don't trust Google's OTA channel" claim lives in who holds the keys, not in running custom server infra.
+- **Manifest generation is unchanged**: `noxos-server`'s scheduled GitHub Action (`list-s3-releases.sh` + `build-manifest.sh`, now weekly not every 6h) still lists the bucket and builds a `{response, patches}` JSON per device/channel, published to GitHub Pages exactly as before.
+- **New (drafted, not deployed): `noxos-server/lambda/ota_handler.py`.** A Lambda that reads that same manifest JSON (from S3 directly once the publish step also uploads there — not yet wired) and, given `?device=&channel=&version=`, applies the existing single-hop-patch-else-full-image resolution logic server-side instead of leaving it to the client, then returns a **presigned S3 URL** (1h expiry) for the one file the device should download next. The device applies it, then calls again with its new version to get the next hop — sequential, not bundled. Pure resolution logic (`resolve_update`) is unit-tested with plain asserts (`lambda/test_ota_handler.py`, passes in an isolated venv since boto3 isn't installed system-wide here — it ships built into the Lambda Python runtime itself, so the real deploy needs zero dependency packaging).
+- **Still not deployed, deliberately** — no IAM role, no Function URL, no manifest→S3 publish step, no bucket-policy change yet. User: keep it drafted/committed, revisit once a real v1 build exists to actually test end-to-end against. When it is deployed, the bucket's current public `GetObject` policy on `full/`/`patches/` should be reconsidered — presigned URLs only mean something if the objects aren't already publicly readable without one.
+- **Still no N-hop patch chaining across multiple missed versions** in v1 — a device more than one release behind gets the full image, same as before. N-hop / bundled chaining is explicitly v2 scope now (see above), not a "maybe never" — this is the first time it's been scoped as a real future phase rather than a permanent non-feature.
+- **No push notifications** — client polls (now calls the Lambda) on its own schedule instead of FCM (conflicts with GMS-independence) or a self-hosted UnifiedPush relay.
+- **CDN in front of S3** — explicitly deferred, not v1 scope, user's own call ("not right now").
+- Signing stays self-controlled regardless of hosting — the "we don't trust Google's OTA channel" claim lives in who holds the keys, not in running custom server infra. A presigned URL is signed with those same self-controlled credentials, not a third party's.
 
 ## Full architecture diagram
 
@@ -100,7 +102,7 @@ Microdroid pVM (ephemeral):
 1. **`noxos-os`** (this repo) — AOSP customization: local manifest, build config patches, `/infra` (spot instance scripts), CI workflow triggering compiles on the self-hosted runner.
 2. **`noxos-payload`** — native isolated payload running inside Microdroid (`AVmPayload_main()`, file parsers). Separate repo deliberately — its history is the audit trail for everything ever executed inside the trust boundary.
 3. **`noxos-app`** — host-side Android app, multi-module Gradle: Host Trigger/Router, VpnService network monitor, Audit & Observability UI. Free GitHub-hosted runners only.
-4. **`noxos-server`** — static OTA manifest publisher (not a running server — see "OTA distribution" below).
+4. **`noxos-server`** — static OTA manifest publisher, plus a drafted-but-undeployed Lambda that signs download URLs per-device on request — see "OTA distribution" below.
 
 ## Roadmap — 14 phases, 5 parts
 

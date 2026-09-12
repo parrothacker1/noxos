@@ -57,13 +57,14 @@ A companion **audit app** records every isolated execution and every flagged net
                                     (Room + Compose)
 ```
 
-### Three Pillars
+### Four Pillars
 
 | Pillar | What it does |
 |--------|-------------|
 | **🪶 Lightweight** | Strips GMS/OEM bloat at build time. Trims fonts, locales, and kernel defconfig. Tunes ART compilation for faster boot and lower RAM. |
 | **🔒 Secure** | Routes untrusted content into disposable Microdroid pVMs via Android's AVF/pKVM stack (SESIP Level 5 certified, Aug 2025). No persistence between scans. |
 | **🔍 Observable** | Every VM scan and every flagged network flow is logged to a local Room database and surfaced in a Compose audit UI — the security claim is verifiable, not a marketing promise. |
+| **🧠 Threat-aware** | A 3-state access list (allowed / blocked / flagged) gates new destinations and files. Flagged traffic and files are isolated-checked inside the same pVM sandbox before ever reaching a self-hosted AI verdict — never a raw payload, never a third-party cloud API. |
 
 ---
 
@@ -95,6 +96,11 @@ A companion **audit app** records every isolated execution and every flagged net
 <td>Serverless OTA manifest — GitHub Actions → static JSON → GitHub Pages</td>
 <td>Bash · jq · GitHub Actions</td>
 </tr>
+<tr>
+<td><a href="https://github.com/parrothacker1/noxos-inference"><b>noxos-inference</b></a></td>
+<td>Self-hosted threat-analysis backend — gradient-boosted traffic classifier + ClamAV file scanning</td>
+<td>Python · FastAPI · XGBoost</td>
+</tr>
 </table>
 
 ---
@@ -105,15 +111,16 @@ A companion **audit app** records every isolated execution and every flagged net
 Part I   — Foundation
   ✅  Literature survey · architecture · all repos scaffolded
   ✅  CI pipelines · branding · OTA manifest generator
-  ⏳  Phase 1: EC2 Spot instance · AOSP sync · Cuttlefish boot
+  ✅  Phase 1: EC2 spot-fleet compile pipeline · AOSP sync · Cuttlefish boot (v0 stock + v1 custom overlay)
 
 Part II  — Core Implementation
-  ✅  Host app: Room audit DB · TriggerRouter · VmPayloadProtocol · Compose UI
-  ✅  Guest payload: self-contained JPEG EXIF parser over vsock (C++)
-  ✅  Net monitor: VpnService capture loop · IPv4 flow logging
+  ✅  Host app (Warden): Room audit DB · TriggerRouter · VmPayloadProtocol · Compose UI
+  ✅  Guest payload: self-contained JPEG EXIF parser over vsock (C++), fuzz-tested
+  ✅  Net monitor: real UDP + TCP relay, verified on real hardware
+  ✅  Access list (allow/block/flag) + gradient-boosted traffic classifier + ClamAV file scanning
   ⏳  Phase 2: Run Google's AVF reference demos on Cuttlefish · verify API contracts
   ⏳  Phase 6: Wire real payload into VM · jniLibs handoff
-  ⏳  Phase 7: Adversarial EXIF test suite
+  ⏳  Isolated cheap-filter checks (files + network samples) inside the pVM, ahead of any AI verdict
 
 Part III — OS Customization
   ⬜  P3–P5: GMS strip · kernel trim · ART tuning · device tree

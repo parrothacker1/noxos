@@ -10,3 +10,6 @@
 [submodule "noxos-server"]
 	path = noxos-server
 	url = https://github.com/parrothacker1/noxos-server.git
+[submodule "noxos-inference"]
+	path = noxos-inference
+	url = https://github.com/parrothacker1/noxos-inference.git

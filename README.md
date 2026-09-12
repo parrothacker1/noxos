@@ -77,11 +77,11 @@ noxos-os  → builds the AOSP image all of the above runs on, uploads full+patch
 noxos-server → static manifest reading from S3, GH Pages, no live server
 ```
 
-The `noxos-app`→`noxos-inference` leg (the bottom two boxes) is real and tested as of 2026-09-12 against a stand-in responder — the real model/service doesn't exist yet. See [`noxos-inference/TASKS.md`](noxos-inference/TASKS.md).
+The `noxos-app`→`noxos-inference` leg (the bottom two boxes) is real and tested — the dispatch loop was verified end-to-end against a stand-in responder 2026-09-12, and as of 2026-09-13 `noxos-inference` has a real trained classifier + FastAPI service (not yet deployed to a live box). See [`noxos-inference/TASKS.md`](noxos-inference/TASKS.md).
 
 ## Status
 
-Don't trust a summary here — read each repo's own `TASKS.md` (index at [`TASKS.md`](TASKS.md)), kept current per-repo; this isn't. As of 2026-09-12: all five repos exist, scaffolded, CI green where CI exists. `noxos-os` has produced two real, boot-verified Cuttlefish artifacts (v0 stock and v1 the custom lightweight-base overlay) via a real AWS spot-fleet compile pipeline. `noxos-app` (branded **Warden**) has a full visual redesign, a real 3-state ACL with priority/kind and a seed list, both UDP and TCP network relay confirmed working on real hardware, and a real dispatch loop to `noxos-inference`'s (not-yet-deployed) service verified end-to-end against a stand-in. `noxos-server` has a drafted-not-deployed OTA-signing Lambda. `noxos-inference` is brand new — infra scripts exist, the model/dataset/service do not yet.
+Don't trust a summary here — read each repo's own `TASKS.md` (index at [`TASKS.md`](TASKS.md)), kept current per-repo; this isn't. As of 2026-09-13: all five repos exist, scaffolded, CI green where CI exists. `noxos-os` has produced two real, boot-verified Cuttlefish artifacts (v0 stock and v1 the custom lightweight-base overlay) via a real AWS spot-fleet compile pipeline. `noxos-app` (branded **Warden**) has a full visual redesign, a real 3-state ACL with priority/kind/safety-score/session-scoping, a seed list, both UDP and TCP network relay confirmed working on real hardware, and a real dispatch loop verified end-to-end against a stand-in. `noxos-server` has a drafted-not-deployed OTA-signing Lambda. `noxos-inference` has a real trained classifier (95.75% accuracy on UNSW-NB15) behind a real FastAPI service, tested, committed, pushed — not yet deployed to a live box, and real explainability text (vs. the current `null` stub) is the one deliberately deferred piece.
 
 ## Conventions
 

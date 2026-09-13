@@ -77,7 +77,7 @@ Extends pillar 3 (Observability) from passive logging toward an actual verdict o
 - **Where inference runs: hybrid, local pre-filter first.** Cheap local heuristics/the ACL itself handle the vast majority; only a genuinely new-and-ambiguous destination would ever reach the model. The model itself: **self-hosted on EC2, not a cloud LLM API** — user's explicit call, "find a pretrained model or train one." A classical gradient-boosted classifier (XGBoost) trained on UNSW-NB15 — cheaper to host (CPU-only, no GPU), faster per-call, and the right tool for structured flow-metadata classification, not an LLM — is now real (see Status below). **File-side analysis is a separate problem, not the same model**: ClamAV (signature-based, free, self-hostable on the same box) is the first pass, since Warden receives APKs/images/docs, not the Windows-executable-shaped inputs most ML malware-classifier research (e.g. EMBER) targets. **Revised 2026-09-13** — see the "Network-side pKVM-gated cheap filter" bullet below: the "local pre-filter" for network traffic is being extended from just the ACL into an actual isolated cheap-filter stage, and the trained model itself is now planned to run on-device rather than only behind the EC2 call.
 - **File-scan trigger surface widened to match**: no longer just the manual "Select & Scan" button — a `MediaStore.Downloads` watcher (`FileArrivalWatcher`, shipped 2026-09-10) auto-triggers a scan for anything landing there, covering SD-card-copy/Bluetooth/Wi-Fi-share without per-transport integration code.
 - **User-facing opt-out, now two independent ones (2026-09-13, user's explicit ask)**: "AI analysis of network traffic" and "AI analysis of files" are separate Settings toggles, each default-on. Turning network off means destinations never get flagged as pending in the first place; the file one is wired (setting exists, default true) but has nothing to gate yet since no file-side AI pipeline is built (see below) — added now so the toggle exists before the feature does, not after.
-- **Explainability (2026-09-13, user's explicit ask): the model's response carries `reasoning` (free text) and `safety_score` (float) alongside `verdict`, not just a bare allow/block.** `AnalysisDispatcher` parses both and writes the real reasoning text into the ACL entry's `reason` field (prefixed `ai:`) instead of a generic placeholder — the ACL screen shows it directly, plus the safety score as a percentage. **Open reconciliation point, not yet resolved with `noxos-inference`**: `noxos-app`'s convention is "higher `safety_score` = safer" (a 0.02 score paired with a `block` verdict in its own tests). `noxos-inference`'s in-progress model (see its own `TASKS.md`) naturally outputs an *attack probability* (its own documented threshold scheme is `<0.4` allow / `0.4–0.6` uncertain / `>0.6` block — higher means *more* dangerous, the opposite polarity). Someone has to invert one side before these two independently-built pieces actually agree — flagged here for whoever picks up `noxos-inference`'s `service/app.py` next, not silently assumed either way.
+- **Explainability (2026-09-13, user's explicit ask): the model's response carries `reasoning` (free text) and `safety_score` (float) alongside `verdict`, not just a bare allow/block.** `AnalysisDispatcher` parses both and writes the real reasoning text into the ACL entry's `reason` field (prefixed `ai:`) instead of a generic placeholder — the ACL screen shows it directly, plus the safety score as a percentage. **Polarity — resolved** (see Status below): inverted at the API boundary, `noxos-app`'s "higher = safer" convention wins on the wire. **Scope of `reasoning` — resolved 2026-09-13**: it explains the verdict in both directions, "safe because X" as much as "unsafe because Y," for both `/analyze/network` and `/analyze/file` — not just a threat explanation when blocking. Still `null` in the real service today; this only settles what it should say once built.
 - **Session-scoped trust for AI verdicts (2026-09-13, user's explicit ask): an AI-resolved verdict is remembered only for the network-monitoring session it was resolved in, then forgotten.** `AclEntity` gained a `sessionOnly: Boolean` field; `NetMonitorService.startMonitor()` calls a new `AclRepository.clearSessionVerdicts(NETWORK)` at the start of every session, deleting only AI-written entries (`sessionOnly = true`) — user-set and seeded entries are untouched, permanent as before. Deliberate freshness-over-permanence tradeoff: a host judged safe today isn't trusted forever without being asked about again, at the cost of re-asking the model once per destination per session instead of once ever. Not yet extended to files (no file-side AI verdicts exist yet to scope this way).
 - **One deployment, not two — boot flags select capability (2026-09-13, user's explicit ask, not yet built).** `noxos-inference` should stay a single service exposing both `/analyze/network` and `/analyze/file`, with a boot-time flag/env var to run in network-only, file-only, or both mode if a deployment ever needs to split them — not two separate EC2 boxes/deployments. Purely a `noxos-inference`-side infra detail; nothing on the `noxos-app` side depends on how this is implemented.
 - **File-side design, decided 2026-09-13 (extends the original sketch into an actual v1 shape — not built yet):**
@@ -85,13 +85,107 @@ Extends pillar 3 (Observability) from passive logging toward an actual verdict o
   - A file the cheap filter flags is **held and escalated to `/analyze/file`, on both trigger paths, and both need to actually withhold access, not just log a flag.** Manual scan (SAF picker) never delivers a `Success` outcome to the requesting flow anyway, so holding is just returning a new `ScanResult.Held` instead — no new capability needed there. **Auto-scan (`FileArrivalWatcher` on Downloads) needs real quarantine** (decided as v1 scope 2026-09-13, not the advisory-only-flag fallback originally considered): the flagged file gets physically moved out of `MediaStore.Downloads` into app-private storage the moment the watcher's cheap-filter flag comes back, and restored to its original location only on a force-allow. Real, non-trivial work — `noxos-app` already holds `MANAGE_EXTERNAL_STORAGE`, so it's possible, but the move/restore logic doesn't exist yet. Matters for `noxos-inference`'s capacity planning — real volume will be much lower than "every scanned file."
   - **The user can force-allow a held file anyway** — an explicit override action, not yet built. For the manual-scan path this means resuming delivery of the already-decoded result; for the auto-scan/quarantine path it means moving the file back from app-private storage to its original `Downloads` location. No UI, no backing "held" state, no move/restore logic exist yet — don't build the override UI before the hold+quarantine mechanism it overrides exists.
   - `/analyze/file` needs **real file bytes**, not metadata-only — already independently discovered and documented on the `noxos-inference` side (ClamAV's signature matching needs actual bytes; a hash alone isn't a scan). Consistent with this plan, not a conflict.
+  - **Retention, decided 2026-09-13**: a quarantined file isn't held forever — a **user-configurable retention period** governs it, mirroring `WardenSettingsRepository`'s existing audit-log retention dropdown (30/90/180/365 days) rather than inventing a new settings pattern. Not built yet; the exact action once retention expires (delete, most likely) wasn't spelled out beyond "not indefinite."
 - **Network-side pKVM-gated cheap filter + on-device classification, designed 2026-09-13 (user's explicit design session, not yet built) — extends the same isolated-parsing idea from files to network packets, closing a real asymmetry.** `PacketUtils`/`TcpRelayManager` parse network-controlled bytes directly in the host process today, completely unisolated — the same class of risk the EXIF parser's real fuzzing-found heap overflow demonstrated on the file side, never checked for on the network side. Per-packet VM routing isn't viable (vsock/boot overhead vs. line-rate relay, and a long-lived VM session would break the ephemeral-by-design invariant), so this reuses the **existing per-destination cost gate rather than adding a new one**: live relay stays host-side and unchanged; only when the ACL flags a destination as genuinely new (as it already does today, once, ever) does a background dispatcher open a **one-shot Microdroid VM** with a small sample of that flow's raw packets — the same `TriggerRouter`→vsock→destroy shape the file path already uses, run asynchronously so the live relay for that flow is never blocked on it.
   - `noxos-payload` gains a **second task type in the same payload binary** (dispatched via the VM config's `task.type`/`command`, not a separate `.so` — one audit trail, one build target, reuses the already-fuzzed vsock plumbing) that runs a cheap header-sanity/protocol-conformance check on the sample — the network-side equivalent of the file path's magic-header-vs-declared-type check.
-  - **A clean VM result resolves the destination without ever calling the AI classifier** — only a VM-flagged sample escalates further, keeping the common (benign) case cheap.
+  - **A clean VM result resolves the destination without ever calling the AI classifier** — only a VM-flagged sample escalates further, keeping the common (benign) case cheap. **Detail decided 2026-09-13**: this clean-result resolution writes a real `ALLOWED` ACL entry, **session-scoped** (`sessionOnly = true`, same convention as an AI-resolved verdict — cleared by `AclRepository.clearSessionVerdicts(NETWORK)` at the start of the next monitoring session, not trusted permanently just because the VM check was clean once), and it gets a **real audit-log entry**, same as any other outcome — a clean result is still a real, storable event, not a silent no-op just because nothing was wrong.
   - **The escalation target is now planned as an on-device classifier, not (only) the cloud `/analyze/network` call.** `noxos-inference`'s real trained XGBoost model (see Status below) gets dumped to its native tree-ensemble JSON and shipped as a bundled `noxos-app` asset, evaluated by a hand-rolled Kotlin tree interpreter in `netmonitor` — deliberately no new ML-runtime dependency (TFLite/ONNX Mobile were considered and rejected: a boosted-tree ensemble doesn't need one, and this codebase has consistently hand-rolled rather than added a dependency for exactly this shape of problem, e.g. the TCP relay).
-  - **Open, not yet resolved**: whether the live EC2 `/analyze/network` endpoint still has a role (periodic model refresh, or a fallback for cases the on-device model can't resolve) once this ships for network traffic, or is fully superseded by the on-device path — files stay server-side regardless, ClamAV isn't a phone-side proposition.
-  - Also reopens the previously-deferred `AclEntity` schema question from a different angle: an on-device classifier needs richer per-flow features (port/protocol/volume/frequency) than `AclEntity` persists today, and `NetMonitorService`'s capture loop already sees those live — computing them on-device to feed a local model is a more natural fit than the original plan of serializing them into an HTTP payload, which makes this extension less speculative than it was when only the cloud path existed.
-- **Status (updated 2026-09-13, session 13)**: the app-side pieces (ACL with kind/priority, auto-flagging, seed list, file-arrival watching + per-source trust, both opt-outs, explainability fields, session-scoped forgetting) are shipped on `noxos-app` `main` and verified live. **`noxos-inference` now has a real trained model and a real service**: a real XGBoost classifier trained on UNSW-NB15 (95.75% accuracy, 0.969 F1 on a held-out split), served via a real FastAPI app (`POST /analyze/network`, `POST /analyze/file` via a real ClamAV client, a boot-flag for network-only/file-only/both deployments), committed and pushed. The safety-score polarity question above is **resolved** — inverted at the API boundary (`safety_score = 1 - attack_probability`), matching `noxos-app`'s convention. `reasoning` is still always `null` — real explainability text is the one deliberately deferred piece, next up. **What's still genuinely open**: no live EC2 endpoint (scripts ready, nothing launched — a real money decision, not made without the user); `service/clamav_client.py`'s actual scan-result parsing has never been exercised against a live `clamd`; the file-side quarantine design and the network-side pKVM/on-device-classifier design above are both plans, not code — no cheap filter (file or network), no held/quarantine state, no force-allow UI, no payload second task type, no VM-sample dispatcher, no on-device model asset/interpreter, no `/analyze/file` app-side caller.
+  - **Partially resolved 2026-09-13**: the live EC2 endpoint is confirmed staying (deployed for real, see the "Resolved" block after the pipeline diagrams below) — files stay server-side regardless, ClamAV isn't a phone-side proposition. **Still open**: whether EC2 is the primary resolution step (on-device classifier layered on top later) or the on-device model is primary with EC2 as fallback/refresh — not pinned down yet, check the "Resolved" block below before assuming either shape.
+  - Also reopens the previously-deferred `AclEntity` schema question from a different angle: an on-device classifier needs richer per-flow features (port/protocol/volume/frequency) than `AclEntity` was last confirmed to persist, and `NetMonitorService`'s capture loop already sees those live — computing them on-device to feed a local model is a more natural fit than the original plan of serializing them into an HTTP payload, which makes this extension less speculative than it was when only the cloud path existed. **Status as of 2026-09-13: unconfirmed, not "not built"** — the user flagged this needs a real fact-check against `noxos-app`'s current code before anyone assumes either way (see the "Resolved" block after the pipeline diagrams below).
+- **Status (updated 2026-09-13, session 13)**: the app-side pieces (ACL with kind/priority, auto-flagging, seed list, file-arrival watching + per-source trust, both opt-outs, explainability fields, session-scoped forgetting) are shipped on `noxos-app` `main` and verified live. **`noxos-inference` now has a real trained model and a real service**: a real XGBoost classifier trained on UNSW-NB15 (95.75% accuracy, 0.969 F1 on a held-out split), served via a real FastAPI app (`POST /analyze/network`, `POST /analyze/file` via a real ClamAV client, a boot-flag for network-only/file-only/both deployments), committed and pushed. The safety-score polarity question above is **resolved** — inverted at the API boundary (`safety_score = 1 - attack_probability`), matching `noxos-app`'s convention. `reasoning` is still always `null` — real explainability text is the one deliberately deferred piece, next up, and now scoped to explain the verdict in both directions (see the "Resolved 2026-09-13" block after the pipeline diagrams below), not just blocks. **What's still genuinely open**: EC2 deployment is now a decided next step, not launched yet (see below — this is no longer an open "should we" question, just an unstarted "do it"); `service/clamav_client.py`'s actual scan-result parsing has never been exercised against a live `clamd`; the file-side quarantine design and the network-side pKVM/on-device-classifier design above are both plans, not code — no cheap filter (file or network), no held/quarantine state, no force-allow UI, no payload second task type, no VM-sample dispatcher, no on-device model asset/interpreter, no `/analyze/file` app-side caller.
+
+### File and network pipelines, end-to-end (designed 2026-09-13, not built — see bullets above for per-piece detail)
+
+**Files — two trigger paths, diverging on what "held" means for each:**
+
+```
+A) Manual scan (SAF picker, "Select & Scan")
+──────────────────────────────────────────────
+User picks file → TriggerRouter.scanFile() reads bytes
+        │
+        ▼
+Microdroid VM (one-shot): parser (EXIF today) + cheap filter run together
+   (magic-header-vs-declared-extension mismatch, size sanity)
+        │
+        ▼
+[status][JSON], now carrying flagged + flag_reason → VM destroyed
+        │
+   ┌────┴────┐
+   │ clean   │ flagged
+   ▼         ▼
+Success   ScanResult.Held(reason) — nothing delivered to the requesting app
+(as today)     │
+               ▼
+      bytes (already in memory) → POST /analyze/file
+               │
+        ┌──────┴──────┐
+        │ allow/force  │ block / no response yet
+        ▼              ▼
+   deliver result   stays Held — force-allow available any time,
+   (resolve Held)   independent of whether the AI has responded
+
+B) Auto-scan (FileArrivalWatcher on Downloads)
+──────────────────────────────────────────────
+ContentObserver fires on a new MediaStore.Downloads file → same pVM step as (A)
+        │
+   ┌────┴────┐
+   │ clean   │ flagged
+   ▼         ▼
+audit-only   MOVE the file out of Downloads into app-private storage, now
+(as today)   (real quarantine — nothing else can open it once moved)
+             → audit entry marked Held
+                     │
+                     ▼
+              bytes → POST /analyze/file
+                     │
+              ┌──────┴──────┐
+              │ allow/force  │ block
+              ▼              ▼
+        move file BACK    stays quarantined
+        to Downloads      (delete-vs-hold-forever: not decided)
+```
+
+**Network — one pipeline, gated by the ACL's existing one-time-per-destination flag, not per-packet:**
+
+```
+Live relay (NetMonitorService: UDP relay + TcpRelayManager) — unchanged, unisolated, stays fast
+        │
+        ▼
+AclRepository: new destination? insertIfAbsent → FLAGGED, once, ever (existing cost gate)
+        │
+        ▼ (async — relay for this flow keeps running through everything below)
+Background dispatcher grabs a small sample of that flow's raw packets
+        │
+        ▼
+Microdroid VM, one-shot: noxos-payload's 2nd task type runs a header-sanity /
+protocol-conformance check on the sample → flagged + reason → VM destroyed
+        │
+   ┌─────┴──────┐
+   │ clean      │ flagged
+   ▼            ▼
+ALLOWED,      escalate to the AI classifier — NEVER reached on a clean VM
+session-      result, which is the point: keeps the common, benign case cheap
+scoped,             │
+audit-logged        ▼
+(no AI call)   On-device: NetMonitorService's already-computed per-flow features
+   │           (port/protocol/volume/frequency) → hand-rolled Kotlin tree interpreter
+   │           evaluating the bundled, JSON-dumped noxos-inference model
+   │                 │
+   │                 ▼
+   │           AclRepository.allow()/.block() written back, sessionOnly=true
+   │           (same session-scoped-trust rule as today), safetyScore recorded
+   │                 │
+   └────────┬────────┘
+            ▼
+     Enforcement as today: BLOCKED drops future flows to that destination
+```
+
+**Resolved 2026-09-13 (user's explicit decisions, same day as the diagrams above — supersedes the four bullets this replaces):**
+- **EC2 gets deployed for real, serving both `/analyze/network` and `/analyze/file`.** This confirms the cloud endpoint is *not* being retired — settles "launch the EC2 box" from a someday item into the actual next infra step. **Not fully reconciled yet**: whether the on-device classifier (designed above) becomes the primary path with EC2 as fallback/model-refresh, or whether EC2 stays the actual resolution step and on-device is a future optimization layered on top — the user confirmed EC2 is live and real, not which of these two shapes wins. Don't build the on-device interpreter as a full EC2 replacement without checking this first.
+- **`reasoning` explains the verdict both ways, not just for blocks.** The service should return a real explanation whether the destination/file was judged safe or unsafe — "safe because X" as much as "blocked because Y." Applies to both `/analyze/network` and `/analyze/file` once real reasoning text is built (still `null` today — this resolves *what* it should say, not that it's written yet).
+- **Quarantined files get a user-configurable retention period, not indefinite hold.** Mirrors the existing audit-log retention pattern (`WardenSettingsRepository`'s 30/90/180/365-day dropdown) rather than a new mechanism — a quarantined/held file that's aged past the configured window gets cleaned up automatically instead of sitting there forever. Not built yet; the exact end-of-retention action (delete vs. something else) wasn't spelled out beyond "don't keep it forever."
+- **`AclEntity` schema extension — fact-checked 2026-09-13, confirmed not built.** Read the real `AclEntity.kt`: still just `kind`/`subject`/`state`/`priority`/`reason`/`updatedAtEpochMillis`/`safetyScore`/`sessionOnly` (schema v5, unchanged since session 12). No port/protocol/volume/frequency fields exist. The "isn't built" framing elsewhere in this doc is now verified, not just last-known.
+- **A clean pVM cheap-filter result is a real, storable `ALLOWED` — not a silent pass-through.** Same session-scoped convention as an AI-resolved verdict (`sessionOnly = true`, cleared by `AclRepository.clearSessionVerdicts(NETWORK)` at the start of the next monitoring session — a clean check today doesn't mean permanently trusted) and it gets a real audit-log entry, same as a blocked or AI-resolved flow. Not built yet, same as the rest of the network-side design above — this only pins down that "clean" isn't "nothing happens."
 
 ## Key technical decisions
 

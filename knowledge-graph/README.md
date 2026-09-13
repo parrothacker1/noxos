@@ -55,29 +55,57 @@ No `INDEX.md` / `index.json` function-level indexes yet. Add those per-project o
 
 ## Data flow (target architecture)
 
-```
-Host OS:
-  Untrusted File (download/share/sideload) ─┐
-  App Network Traffic → VPNService Monitor ──┼─→ Host Trigger/Router      [noxos-app / Warden]
-                                              ↓
-Microdroid pVM (ephemeral):
-  Boot VM → Isolated Payload/Parser → Validate/Scan/Parse → Return Result → Destroy VM   [noxos-payload]
-                                              ↓                    ↓
-                              Sanitized Result → Requesting App    Audit & Observability App   [noxos-app]
-                                                                   (execution + traffic logs)
-                                                                   ↓
-                              Flagged (new/ambiguous) destination or file, one verdict ever
-                                                                   ↓
-                                                    Self-hosted inference backend  [noxos-inference]
-                                                    (gradient-boosted classifier for traffic,
-                                                     ClamAV for files) — verdict written back
-                                                     to the ACL, may then enforce future traffic
+**Designed 2026-09-13, not built** — the two mermaid diagrams below are the current target shape (both a pKVM cheap-filter stage and, for network, an on-device classifier); full rationale and what's still open lives in [`PROJECT.md`](PROJECT.md)'s "Threat analysis" section and its "File and network pipelines" diagrams. What's actually shipped as of this writing is narrower — see Status below.
 
-noxos-os  → builds the AOSP image all of the above runs on, uploads full+patch OTA artifacts to S3
-noxos-server → static manifest reading from S3, GH Pages, no live server
+```mermaid
+flowchart TD
+    subgraph FILES[Files — noxos-app / noxos-payload]
+        direction TB
+        F1["Manual: Select &amp; Scan"] --> F3
+        F2["Auto: FileArrivalWatcher on Downloads"] --> F3
+        F3["TriggerRouter reads bytes"] --> F4
+        F4["Microdroid VM: parser + cheap filter<br/>(magic-header mismatch, size sanity)"] --> F5{"Flagged?"}
+        F5 -- no --> F6["Success / audit-only"]
+        F5 -- "yes, manual path" --> F7["ScanResult.Held<br/>not delivered"]
+        F5 -- "yes, auto-scan path" --> F8["Quarantine:<br/>move out of Downloads"]
+        F7 --> F9["POST /analyze/file<br/>(real bytes)"]
+        F8 --> F9
+        F9 --> F10{"Verdict"}
+        F10 -- "allow / force-allow" --> F11["Deliver result /<br/>restore to Downloads"]
+        F10 -- block --> F12["Stays held / quarantined"]
+    end
+
+    subgraph NETWORK[Network — noxos-app / noxos-payload]
+        direction TB
+        N1["Live relay: NetMonitorService<br/>(UDP relay + TcpRelayManager)"] --> N2{"New destination?"}
+        N2 -- no --> N1
+        N2 -- "yes, once ever" --> N3["AclRepository: FLAGGED<br/>(existing cost gate)"]
+        N3 --> N4["Background dispatcher:<br/>sample flow's packets, async"]
+        N4 --> N5["Microdroid VM: 2nd payload task type<br/>(header-sanity / protocol check)"]
+        N5 --> N6{"Flagged?"}
+        N6 -- no --> N7["ALLOWED, session-scoped,<br/>audit-logged<br/>(no AI call)"]
+        N6 -- yes --> N8["On-device classifier:<br/>hand-rolled Kotlin tree interpreter"]
+        N8 --> N9["AclRepository.allow / .block<br/>sessionOnly=true"]
+        N7 --> N10["Enforcement:<br/>BLOCKED drops future flows"]
+        N9 --> N10
+    end
+
+    MODEL["noxos-inference:<br/>trained XGBoost model"] -. "dumped to JSON,<br/>bundled as asset" .-> N8
+
+    AUD["Audit &amp; Observability app<br/>(noxos-app)"]
+    F6 -.-> AUD
+    F11 -.-> AUD
+    F12 -.-> AUD
+    N9 -.-> AUD
 ```
 
-The `noxos-app`→`noxos-inference` leg (the bottom two boxes) is real and tested — the dispatch loop was verified end-to-end against a stand-in responder 2026-09-12, and as of 2026-09-13 `noxos-inference` has a real trained classifier + FastAPI service (not yet deployed to a live box). See [`noxos-inference/TASKS.md`](noxos-inference/TASKS.md).
+```mermaid
+flowchart LR
+    OS["noxos-os<br/>builds the AOSP image everything above runs on"] -->|full + patch OTA artifacts| S3[("S3: noxos-releases")]
+    S3 --> SRV["noxos-server<br/>static manifest, GH Pages, no live server"]
+```
+
+The `noxos-app`→`noxos-inference` leg is real and tested today — the dispatch loop was verified end-to-end against a stand-in responder 2026-09-12, and as of 2026-09-13 `noxos-inference` has a real trained classifier + FastAPI service (not yet deployed to a live box, and it's still the cloud call the diagram's on-device classifier is meant to supersede for network traffic — see `PROJECT.md` for that open question). The pKVM cheap-filter stage (both diagrams), file quarantine, and the on-device classifier itself are all still plans, not code. See [`noxos-inference/TASKS.md`](noxos-inference/TASKS.md), [`noxos-app/TASKS.md`](noxos-app/TASKS.md) session 13, and [`noxos-payload/TASKS.md`](noxos-payload/TASKS.md).
 
 ## Status
 

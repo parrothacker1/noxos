@@ -24,6 +24,7 @@ knowledge-graph/
 ├── README.md                    # this file — hub, points everywhere else, "start here" for any AI
 ├── PROJECT.md                    # full architecture, decisions, roadmap (source of truth)
 ├── TASKS.md                       # index only — points to each repo's own TASKS.md below
+├── discussions.md                # unfinalized design-review scratchpad — NOT authoritative, see its own header
 ├── noxos-os/README.md            # AOSP customization — infra scripts, local manifest, CI
 ├── noxos-os/TASKS.md              # noxos-os's own session-by-session task history
 ├── noxos-os/CUTTLEFISH.md        # local Cuttlefish container setup detail

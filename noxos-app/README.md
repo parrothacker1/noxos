@@ -84,7 +84,7 @@ The external design mockup (`Warden isolation redesign.zip`, fed into this app's
 - New dependencies added during the redesign: `androidx.datastore:datastore-preferences`, `androidx.compose.material:material-icons-extended` (standard icons instead of hand-porting ~20 custom SVG paths from the mockup), `androidx.core:core-ktx`, `androidx.lifecycle:lifecycle-runtime-ktx`.
 - `.github/workflows/ci.yml` — `setup-java` (temurin 17) → `gradle/actions/setup-gradle` → `./gradlew build`, GitHub-hosted runners. Green on every push this session.
 - `.github/workflows/release.yml` — tag-push (`v*`) triggered, builds a release APK (unsigned — no signing infra yet, see `TASKS.md` backlog item 12) and runs `gh release create --generate-notes`.
-- Local `AGENTS.md` (gitignored, not in the public repo) documents the commit-message convention (`type: message`, single-line, no `Co-Authored-By`) and the no-comments rule, added after repeatedly needing to be re-corrected on commit formatting.
+- Local `CLAUDE.md` (gitignored, not in the public repo; renamed from `AGENTS.md` session 21 so Claude Code auto-loads it every session, compaction-proof — see `TASKS.md` session 21) documents the commit-message convention (`type: message`, single-line, no `Co-Authored-By`) and the no-comments rule, added after repeatedly needing to be re-corrected on commit formatting.
 
 ## Local verification note
 

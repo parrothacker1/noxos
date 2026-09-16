@@ -50,7 +50,7 @@ Scan result came back `"FLAGGED — SCAN DID NOT COMPLETE CLEANLY, VM payload fi
 
 With the model now loadable, ran the real VPN-monitoring flow end to end for the first time in the project's history: real Android VPN consent dialog, accepted, `Vpn: Established by com.noxos.app on tun0` confirmed in system logs, `ConnectivityService` validated it, real `tun0` at `10.0.0.1/32`, UI showed "MONITORING — N CONNECTIONS INSPECTED". Screenshots: `vpn_consent_dialog.png`, `monitoring_active.png` (in `../../local-artifacts/screenshots/`).
 
-**One real, still-open finding from this**: `OnDeviceNetworkClassifier.kt` is dead code — the Safe/Flagged label shown is a plain heuristic, not the model. See `ML-NETWORK-DESIGN.md` item 5/backlog #19.
+**One real, still-open finding from this**: `OnDeviceNetworkClassifier.kt` is dead code — the Safe/Flagged label shown is a plain heuristic, not the model. See `../noxos-inference/ML-NETWORK-DESIGN.md` item 5/backlog #19.
 
 ## Status as of this writing
 

@@ -1,8 +1,14 @@
 # noxos-payload — Task List
 
-Last updated: 2026-09-16 (session 7, this repo — first real device boot found a real bug: missing `AVmPayload_notifyPayloadReady()` call, fixed). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
+Last updated: 2026-09-16 (session 7, this repo — real device boot found a real bug (missing `AVmPayload_notifyPayloadReady()`), fixed, rebuilt, and released as v1.0.1). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
 
-## Session 7 (2026-09-16) — real device boot, real bug found and fixed
+## Session 7 continued (2026-09-16) — v1.0.1 cut, fix verified compiled and linked
+
+Warden App needed the fix in an actual release (their `sync-payload.yml` only watches GitHub releases, not raw commits — v1.0.0 predates `7b4ebfb`). User approved spinning up EC2 again (same r5.2xlarge fleet, `infra` branch `fleet-config.json` unchanged from v1.0.0). Fleet `fleet-64e2144c-94b2-4add-be2c-d7f0f17c7fb9`, instance `i-0f17c1a5c8fa3b14a`: x86_64 leg finished in 10m38s (ninja), arm64-v8a leg followed on the same instance via `build-all-abis.sh`, both uploaded to `s3://noxos-releases/payload-build/20260916T034033Z/`, instance self-terminated cleanly, fleet auto-scaled to 0 — no manual cleanup needed, `bootstrap.sh`'s own cleanup logic from session 6 held up unchanged.
+
+Verified both downloaded artifacts before releasing: real ELF64 shared objects (x86-64 and aarch64 respectively, `for Android 37`), `NEEDED libvm_payload.so`, and — the actual point of this rebuild — `nm -D` shows `AVmPayload_notifyPayloadReady` as an imported undefined symbol, confirming the fix is actually compiled in, not just present in source. Cut `v1.0.1` (https://github.com/parrothacker1/noxos-payload/releases/tag/v1.0.1) with both assets, same naming convention as v1.0.0 (`libnoxos_payload_stub-x86_64.so`, `libnoxos_payload_stub-arm64-v8a.so`).
+
+**Still not verified end-to-end on a real device** — that link (`sync-payload.yml` → Warden rebuild → real scan) is Warden App's side to close out and report back.
 
 `noxos-os`'s Warden fixed its VM-boot race overnight (see `../discussions.md` item 18/20) — first time the inner Microdroid VM has actually booted end-to-end on a real device. That surfaced a payload-side bug that the boot race had been masking: `libnoxos_payload_stub.so` exits with code 1 before Warden ever sees a "ready" signal (`FLAGGED — SCAN DID NOT COMPLETE CLEANLY, VM payload finished before becoming ready (exit=1)`).
 

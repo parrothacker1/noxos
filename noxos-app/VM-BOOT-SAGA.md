@@ -1,0 +1,57 @@
+# The VM-boot saga, 2026-09-15/16 — from "never booted once" to fully working
+
+Moved here from `discussions.md` (2026-09-16 knowledge-graph reorg). Continues from `TASKS.md` session 23, where the priv-app/permission gap closed but an actual in-app VM launch had never been exercised. This file is the app-side half of the investigation — see `../noxos-os/TASKS.md` for the OS/SELinux side (signing-key collapse, gceservice) that ran in parallel.
+
+## Root cause #1: idsig — Microdroid needs a v3-signed calling APK, no v2 fallback
+
+With storage/networking fixed OS-side, the first real in-app VM launch attempt showed `virtmgr` spawning but never pairing a `crosvm` child. Long elimination process, in order:
+- Ruled out a missing sepolicy rule: `virtualizationservice_use()` in AOSP's real `system/sepolicy/public/te_macros` only authorizes fds the caller explicitly creates/passes — the `surfaceflinger`-fd and cross-app `tcp_socket` denials being chased fall outside that contract entirely.
+- Ruled out display/Surface config and leaked relay sockets by reading `MicrodroidVmSessionFactory.createSession()` directly — the Builder used doesn't expose a display option, and the manual-scan repro provably had zero relay sockets open.
+- Ruled out "ambient SurfaceFlinger fd leak" via a real A/B test: built Google's own unmodified `MicrodroidDemoApp` against the exact same synced tree, installed on the same device — it hit the **identical** denials and booted clean anyway. Denials are non-fatal GPU/display-passthrough probing in both cases, not the blocker.
+- Sharpened the target: Warden's `virtmgr` never reached `"Running crosvm with args"`, unlike the clean demo run — failure is before virtmgr attempts anything, in its own startup/config-validation step.
+- Found and fixed a real, separate gap along the way: `libnoxos_payload_stub.so` didn't exist anywhere in the installed APK at all (the jniLibs handoff had never been built — see `../noxos-payload/TASKS.md` for that fix). Necessary, but retesting against a real payload (`v2.2.3`) showed the **identical** stall — proving this was never the actual blocker either.
+- `platform_app_36` (a denied `tcp_socket` owner) resolved to a shared SELinux domain held by three unrelated stock apps (`calendar`, `messaging`, `statementservice`) — device-state noise, not a Warden signal.
+- Kernel audit rate-limiting was hiding evidence: `audit_lost=92` in the exact failure window. Fixed per AOSP's own SELinux validation docs (`adb shell auditctl -r 0`). Complete picture after that: same known-and-cleared denial set the demo app also hit and survived — nothing new.
+- **Found, in Warden's own audit database, not logcat**: `android.os.ServiceSpecificException: failed to create idsig` → `Fallback to v2 when v3 block not found is not yet implemented` → `No APK Signature Scheme block ... ID: 4031998144` (`0xF05368C4` = the real v3 magic). Microdroid generates an "idsig" from the *calling app's own APK* to verify the payload before launching — this AVF version has no v2 fallback. Warden's release APK was v2-signed only (confirmed via `apksigner verify --verbose`).
+
+**Fix**: `enableV3Signing = true` + `enableV2Signing = true` in `app/build.gradle.kts`'s release `signingConfig`. Shipped as `v2.2.4`. **Confirmed working**: `crosvm` launched for the first time ever in this project's history — real command line, real composite disk images, `"Non-protected virtual machine ... started."`
+
+## Root cause #2: the vsock race — client called `connectVsock()` before the VM could possibly be listening
+
+`v2.2.4` immediately hit a new failure: `Failed to get guest CPU time: zero value is measured on elapsed CPU guest_time` → `virtmgr` force-kills the VM within ~5ms, `crosvm` never produces a single line of its own log output (vs. 16 real lines from the working demo app in a head-to-head comparison). `virtmgr` confirmed to kill *proactively* (its own kill log line precedes crosvm's exit), not reactively.
+
+Ruled out via direct AOSP source research (`android/virtmgr/src/crosvm.rs`): `virtmgr`'s only two kill paths are a 30s+ boot-hangup timeout (far too slow) or an **explicit external kill request**. AOSP's own docs state the mechanism verbatim: a VM runs only as long as something holds a reference to its `IVirtualMachine` object; drop the reference before the VM finishes and `VirtualizationService` auto-shuts it down.
+
+**Found**: `MicrodroidVmSessionFactory.createSession()` called `vm.run()` (async, returns immediately) and the very next line was `session.getTransport()` → `vm.connectVsock(...)` with zero wait, zero retry, zero readiness check. Since crosvm hadn't even been scheduled, `connectVsock()` threw almost instantly, unwinding the `.use {}` block in `TriggerRouter.scanFile()`, which called `session.close()` → `vm.stop()` — an explicit stop within milliseconds. Independently corroborated by decompiling `MicrodroidDemoApp.apk`'s dex: it references `VirtualMachineCallback`/`onPayloadReady` — the demo app already used the correct pattern Warden skipped.
+
+**Fix**: registered a `VirtualMachineCallback` right after `getOrCreate()`/before `run()`, using a `CompletableDeferred<Unit>` completed on `onPayloadReady()` (or failed on `onError`/`onStopped`/`onPayloadFinished`). `getTransport()` now awaits that deferred before calling `connectVsock()`. Method signatures verified against the real API 35 system stub jar via `javap`. Shipped, CI-verified, staged as `v2.2.5`.
+
+**Also caught before it became a blocker**: the first CI run that looked green had only exercised `ci.yml` (unsigned debug build) — the real v3-signed release build only comes from `release.yml`, tag-triggered. Bumped to `2.2.5`, tagged, real signed release built and staged ahead of the OS-side fix landing, verified by extracting `classes2.dex` and confirming the new 3-arg `MicrodroidVmSession` constructor and `onPayloadReady` symbols were actually compiled in (not just trusting the version bump).
+
+## Both fixes confirmed together, real device, first full lifecycle ever
+
+Once the OS-side gceservice SELinux fix (`../noxos-os/TASKS.md`) landed, a full retest on `v2.2.5` showed: VM created → started → **ran over 1 full second** (vs. the old 4-5ms instant-kill) → exited cleanly. The race was gone. Real Audit Trail evidence produced from a real boot + real payload execution — screenshots used in the faculty presentation.
+
+## Root cause #3: the payload itself never signals ready — found once the race stopped masking it
+
+Scan result came back `"FLAGGED — SCAN DID NOT COMPLETE CLEANLY, VM payload finished before becoming ready (exit=1)"`. Boot: 94ms, total: 1332ms — consistent with a VM that boots and launches the payload fine, then the payload immediately errors out. Traced to `noxos-payload`: `payload_main.cpp` never called `AVmPayload_notifyPayloadReady()` (confirmed against the real AOSP `EmptyPayloadApp` reference — a working payload calls it right after setup). Fixed there (`7b4ebfb`), but the first fix attempt (`v1.0.1`/`v2.2.7`) did **not** actually resolve it — real retest still showed `exit=1` after only ~11ms, before ever reaching the ready call; host-side lifecycle did genuinely improve (crosvm's own exit went from an abrupt kill to a clean `exit status: 0`), but the payload's internal failure is a separate, still-open bug as of the last check — see `../noxos-payload/TASKS.md` for the live state of that investigation (console-capture needed `DEBUG_LEVEL_FULL` on `VirtualMachineConfig.Builder`, stdio buffering wasn't disabled, current best guess is something failing inside the raw `AF_VSOCK` `socket()`/`bind()`/`listen()` calls rather than using the documented `AVmPayload_runVsockRpcServer` AIDL helper).
+
+**Also found once the race stopped masking things**: `NetworkSampleVmDispatcher` (the network-traffic equivalent VM check, polling every 30s) hits the identical payload `exit=1` bug — this blocks both file-scan and network-sample-VM paths, not just files as originally assumed.
+
+## Two more real bugs found testing the working device (2026-09-16, same night)
+
+**Quarantine crash — RESOLVED, `v2.2.8`.** `MainActivity` has two scan entry points: `handleAutoScan()` correctly calls `quarantineManager.quarantine(...)`; the manual "Select & Scan File" button's `scanFile()` — the only path anyone had tested — never called `quarantine()` at all, a straight omission. Fixed by mirroring the auto-scan logic in (`3cfb6fd`). That surfaced a real, separate, honestly-flagged risk: `QuarantineManager.quarantine()`'s `contentResolver.delete(uri,...)` (remove original after copying) was written against `MediaStore.Downloads` URIs and could fail for other document providers. It did — `java.lang.UnsupportedOperationException: Delete not supported`, uncaught, crashed the app 5 times in a row, 100% reproducible. **Fixed and confirmed on-device**: the delete failure is now caught and logged (`W WardenQuarantineManager`) instead of propagating; the file still lands safely in quarantine either way — "contain first, cleanup best-effort," matching the intended design. `logcat -b crash` clean since.
+
+**On-device model download 403 — RESOLVED.** `ModelUpdateManager.kt` pointed at an S3 path that had never been made public (bucket has `BlockPublicAcls`/`IgnorePublicAcls` on; the existing `PublicReadForOTA` policy only covered `full/*`/`patches/*`). Root-agent extended that policy to `on-device-models/*` and republished the real, already-trained model (verified against `noxos-inference`'s own GitHub Releases artifact, matching SHA256) to `s3://noxos-releases/on-device-models/network-classifier/latest/{manifest.json,model.json}`. Separately, `PROJECT.md`'s "real checksum verification on the app side" claim was checked and found half-true: post-download integrity checking existed, but the actual update-gating decision was on an integer `version` field with no persisted digest to compare — genuinely new logic needed. **Fixed (`b7864de`)**: gates on `manifest.sha256 == meta.sha256` now.
+
+**Shipped together as `v2.2.6`** (quarantine fix `3cfb6fd`, digest-gating `b7864de`, model URL repoint `f09429c`, vsock fix carried from `v2.2.5`) — independently re-verified the S3 manifest's SHA256 before shipping rather than trusting the root agent's report.
+
+## First full "Start Monitoring" success, ever
+
+With the model now loadable, ran the real VPN-monitoring flow end to end for the first time in the project's history: real Android VPN consent dialog, accepted, `Vpn: Established by com.noxos.app on tun0` confirmed in system logs, `ConnectivityService` validated it, real `tun0` at `10.0.0.1/32`, UI showed "MONITORING — N CONNECTIONS INSPECTED". Screenshots: `vpn_consent_dialog.png`, `monitoring_active.png` (in `../../local-artifacts/screenshots/`).
+
+**One real, still-open finding from this**: `OnDeviceNetworkClassifier.kt` is dead code — the Safe/Flagged label shown is a plain heuristic, not the model. See `ML-NETWORK-DESIGN.md` item 5/backlog #19.
+
+## Status as of this writing
+
+Both original VM-boot blockers (idsig, vsock race) and the gceservice SELinux fix are confirmed fixed on real hardware. Quarantine crash and model-download are fixed and confirmed. **Still open**: the payload's own `exit=1` (backlog item, see `TASKS.md` and `../noxos-payload/TASKS.md`), the on-device classifier not being wired into live traffic verdicts (backlog #19), and retesting the network-sample-VM path once the payload fix actually lands (backlog #20).

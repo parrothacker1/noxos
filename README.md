@@ -24,19 +24,23 @@ knowledge-graph/
 ├── README.md                    # this file — hub, points everywhere else, "start here" for any AI
 ├── PROJECT.md                    # full architecture, decisions, roadmap (source of truth)
 ├── TASKS.md                       # index only — points to each repo's own TASKS.md below
-├── discussions.md                # unfinalized design-review scratchpad — NOT authoritative, see its own header
+├── discussions.md                # user ↔ root-agent conversation log ONLY — not a technical archive, see its own header
 ├── noxos-os/README.md            # AOSP customization — infra scripts, local manifest, CI
 ├── noxos-os/TASKS.md              # noxos-os's own session-by-session task history
 ├── noxos-os/CUTTLEFISH.md        # local Cuttlefish container setup detail
 ├── noxos-payload/README.md       # Microdroid native payload — AVF research findings
 ├── noxos-payload/TASKS.md         # noxos-payload's own task history
 ├── noxos-app/README.md           # host Android app (Warden) — Gradle module layout
-├── noxos-app/TASKS.md             # noxos-app's own task history
+├── noxos-app/TASKS.md             # noxos-app's own task history (session log)
+├── noxos-app/VM-BOOT-SAGA.md     # the full VM-boot investigation (idsig, vsock race, SELinux) — read this, not TASKS.md, for that story
+├── noxos-app/ML-NETWORK-DESIGN.md # network-classifier design history — cheap filter, wire contract, feature set, XAI (spans noxos-app + noxos-inference)
 ├── noxos-server/README.md        # OTA update server — API shape
 ├── noxos-server/TASKS.md          # noxos-server's own task history
 ├── noxos-inference/README.md     # threat-analysis inference backend
-└── noxos-inference/TASKS.md       # noxos-inference's own task history
+└── noxos-inference/TASKS.md       # noxos-inference's own task history — model training/metrics; see noxos-app/ML-NETWORK-DESIGN.md for the design history behind it
 ```
+
+**Large or multi-topic files get split, not left as one growing log** — `noxos-app/TASKS.md` split its VM-boot investigation and ML-design history into their own files above once they got large enough that a reader only interested in one topic would otherwise have to pull in the other. If a repo's `TASKS.md` starts covering a self-contained topic at length, split it the same way rather than letting one file become the de facto choke point again (this happened once already, with `discussions.md` — see that file's own header).
 
 ## Branding
 
@@ -48,7 +52,7 @@ knowledge-graph/
 |---|---|---|---|
 | [noxos-os](https://github.com/parrothacker1/noxos-os) | Shell + AOSP/Soong | AOSP fork build pipeline — local manifest, infra scripts, self-hosted CI | [`noxos-os/README.md`](noxos-os/README.md) + [`noxos-os/TASKS.md`](noxos-os/TASKS.md) |
 | [noxos-payload](https://github.com/parrothacker1/noxos-payload) | C++ (Android.bp) | Native payload that runs inside the Microdroid pVM | [`noxos-payload/README.md`](noxos-payload/README.md) + [`noxos-payload/TASKS.md`](noxos-payload/TASKS.md) |
-| [noxos-app](https://github.com/parrothacker1/noxos-app) | Kotlin (Gradle) | Host-side Android app (**Warden**) — trigger/router, VPN monitor, audit UI, ACL | [`noxos-app/README.md`](noxos-app/README.md) + [`noxos-app/TASKS.md`](noxos-app/TASKS.md) |
+| [noxos-app](https://github.com/parrothacker1/noxos-app) | Kotlin (Gradle) | Host-side Android app (**Warden**) — trigger/router, VPN monitor, audit UI, ACL | [`noxos-app/README.md`](noxos-app/README.md) + [`noxos-app/TASKS.md`](noxos-app/TASKS.md); VM-boot bugs → [`VM-BOOT-SAGA.md`](noxos-app/VM-BOOT-SAGA.md); network-classifier design → [`ML-NETWORK-DESIGN.md`](noxos-app/ML-NETWORK-DESIGN.md) |
 | [noxos-server](https://github.com/parrothacker1/noxos-server) | Bash + GitHub Actions | Static OTA manifest publisher (GH Pages) — not a running service | [`noxos-server/README.md`](noxos-server/README.md) + [`noxos-server/TASKS.md`](noxos-server/TASKS.md) |
 | [noxos-inference](https://github.com/parrothacker1/noxos-inference) | Python (FastAPI) | Self-hosted threat-analysis backend for Warden's flagged traffic/files | [`noxos-inference/README.md`](noxos-inference/README.md) + [`noxos-inference/TASKS.md`](noxos-inference/TASKS.md) |
 

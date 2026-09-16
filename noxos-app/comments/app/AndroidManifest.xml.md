@@ -10,4 +10,4 @@ android.permission.MANAGE_VIRTUAL_MACHINE permission is granted`, even though th
 is present and the device has real AVF/Microdroid support. Only a priv-app/platform-signed
 install would actually receive the grant — tracked in `knowledge-graph/noxos-os/TASKS.md`
 Phase 1c, not fixable from this repo. See `knowledge-graph/noxos-app/TASKS.md` session 18
-and `knowledge-graph/discussions.md` item 10 for the full testing writeup.
+and `knowledge-graph/noxos-app/TASKS.md` session 18 for the full testing writeup.

@@ -1,6 +1,26 @@
 # noxos-payload — Task List
 
-Last updated: 2026-09-21 (session 8, this repo — v1.0.2 diagnostic build finally finished and released; snapshot-resume was not actually faster than a cold build for this small module; two real ops mistakes made and corrected in the same session, documented below so they don't repeat). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
+Last updated: 2026-09-22 (session 9, this repo — **real root cause of the exit=1 symptom found and fixed**: dlopen() failing on a missing libc++.so in Microdroid's restricted linker namespace, not anything vsock/socket-related. Fixed via `stl: "libc++_static"`, verified at the linker level, released as v1.0.3). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
+
+## Session 9 (2026-09-22) — real root cause found via console output, v1.0.3 shipped
+
+Warden App finally got real guest console output from a live device (DEBUG_LEVEL_FULL + v1.0.2's diagnostic build). Definitive finding, not another guess:
+
+```
+E microdroid_launcher: Failed to load /mnt/apk/lib/x86_64/libnoxos_payload_stub.so: Failed to dlopen:
+dlopen failed: library "libc++.so" not found: needed by /mnt/apk/lib/x86_64/libnoxos_payload_stub.so
+in namespace microdroid_app
+```
+
+The payload's own code **never ran at all** — confirmed zero occurrences of v1.0.2's `"AVmPayload_main entered"` checkpoint log anywhere in the capture. `dlopen()` fails at the dynamic-linker level before `microdroid_launcher` can even call into the binary. Microdroid's restricted `microdroid_app` linker namespace doesn't provide a shared `libc++.so` the way a normal Android app process would (expected sandboxing, not a platform bug) — but `Android.bp` never declared an `stl` property, so Soong defaulted to dynamically linking against `libc++.so`. `microdroid_manager` sees the process exit(1) immediately and reports it as the generic "task exited" signal — that's what "exit=1" has meant this entire investigation, from session 7 onward. Nothing to do with `socket()`/`bind()`/`listen()`/vsock at all; the `AVmPayload_runVsockRpcServer` lead from earlier sessions was a dead end that never needed chasing.
+
+**Fix**: added `stl: "libc++_static"` to the `cc_library_shared` block in `Android.bp` (commit `c4c49f4`) — statically links the C++ runtime into the binary instead of depending on a shared `libc++.so` the deployment environment doesn't provide. Verified the exact string value against Soong's own source (`build/soong/cc/stl.go`) before committing, since a wrong property value would have cost another full EC2 cycle to discover.
+
+**Build/release, done right this time**: launched a single one-time spot instance via `run-instances` with the **correct** `Name=noxos-rom-compile` tag from the start (session 8's mistake not repeated). Cold build (no snapshot resume, per session 8's finding that resuming doesn't help). x86_64: ~19min total (7m51s analysis + 10m49s ninja). arm64-v8a: ~20min total (8m32s analysis + compile), with one transient SSH connection timeout and one false-positive "memory stall" log line mid-build that resolved on its own — confirmed via `dmesg` that no OOM kill actually occurred, and confirmed via direct process checks (not `ps` `TIME` misreads this time) that the build was genuinely healthy throughout, not stuck. Both ABIs' artifacts grew from ~36KB to ~148-184KB, exactly as expected once the C++ runtime is embedded rather than referenced.
+
+Verified both downloaded artifacts before releasing: real ELF64 `.so` per ABI, and — the actual point of the fix — `readelf -d` confirms `libc++.so` is **gone** from the `NEEDED` list on both ABIs (only `libvm_payload.so`, `libc.so`, `libm.so`, `libdl.so` remain), while `nm -D` confirms `AVmPayload_notifyPayloadReady` is still correctly imported. Cut `v1.0.3` (https://github.com/parrothacker1/noxos-payload/releases/tag/v1.0.3), same asset naming as prior releases. Instance `i-06dce02dea588d189` self-terminated cleanly on success — `bootstrap.sh`'s own completion logic worked without any manual intervention this time.
+
+**Still open**: not yet verified against a real device. That's Warden App's side — pull v1.0.3 via `sync-payload.yml`, redeploy, rerun the scan. If this really is the fix, both the file-scan and network-sample-VM paths should work cleanly for the first time in the project's history.
 
 ## Session 8 (2026-09-21) — v1.0.2 finally shipped; two real mistakes made and fixed live
 

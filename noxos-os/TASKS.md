@@ -1,6 +1,6 @@
 # noxos-os — Task List
 
-Last updated: 2026-09-12. Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-os`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`) so a session working only on this repo doesn't need the other four repos' history. See also this repo's own [`README.md`](README.md) and [`CUTTLEFISH.md`](CUTTLEFISH.md).
+Last updated: 2026-09-22. Session log below runs through the Phase 1c priv-app work; the signing-key role collapse and gceservice SELinux fixes that closed out the VM-boot saga's OS-side half are further down this file (search "gceservice"/"seapp_contexts" if jumping in cold) — see [`../noxos-app/VM-BOOT-SAGA.md`](../noxos-app/VM-BOOT-SAGA.md) for the app-side half and the full combined story. Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-os`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`) so a session working only on this repo doesn't need the other four repos' history. See also this repo's own [`README.md`](README.md) and [`CUTTLEFISH.md`](CUTTLEFISH.md).
 
 Session numbers below are this repo's own chronology (AWS/build-infra work), tracked somewhat independently from `noxos-app`'s session numbers since a lot of sessions touched only one repo or the other.
 

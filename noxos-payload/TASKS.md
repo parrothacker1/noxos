@@ -1,6 +1,26 @@
 # noxos-payload — Task List
 
-Last updated: 2026-09-22 (session 9, this repo — **real root cause of the exit=1 symptom found and fixed**: dlopen() failing on a missing libc++.so in Microdroid's restricted linker namespace, not anything vsock/socket-related. Fixed via `stl: "libc++_static"`, verified at the linker level, released as v1.0.3). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
+Last updated: 2026-09-22 (session 9, this repo — **exit=1 investigation fully closed**: real root cause found (missing libc++.so in Microdroid's linker namespace), fixed via `stl: "libc++_static"`, released as v1.0.3, and confirmed working end-to-end on a real device — first successful full VM-boot-to-scan-result lifecycle in the project's history). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
+
+## Session 9 continued (2026-09-22) — v1.0.3 confirmed working end-to-end, real device, first time ever
+
+Warden App double-verified before testing: binary-level check first (`readelf -d` confirmed `libc++.so` gone from `NEEDED`, `nm -D` confirmed `notifyPayloadReady` still exported, size matched the expected 151,696 bytes), then ran the actual scan on a live device. Complete, clean console output for the first time in the project's history:
+
+```
+[1.381815] noxos-payload: AVmPayload_main entered
+[1.383069] noxos-payload: starting EXIF parser on vsock port 5000
+[1.383265] noxos-payload: listening for scan requests
+microdroid_manager: notifyPayloadReady called by client with UID: Some(6000)
+[1.392510] noxos-payload: connection accepted, scanning
+[1.394924] noxos-payload: scan complete, exiting
+VM with CID 2050 finished payload → crosvm exited with status exit status: 0
+```
+
+And a real protocol result made it back to the app: scanned a PNG (not a JPEG), got `outcome=FAILURE`, `errorMessage={"error":"not a JPEG file"}` — a genuine parsed verdict from the EXIF parser, not a crash or timeout. Full pipeline confirmed: VM boots → payload loads and runs → parser processes real file bytes over vsock → correct answer returned → VM shuts down cleanly.
+
+**The exit=1 mystery, closed for real**: sessions 7-9's entire chase (notifyPayloadReady, stdio buffering, the vsock/AVmPayload_runVsockRpcServer red herring, two EC2 ops mistakes, three release cycles) traced back to one missing `Android.bp` property. Worth remembering: "exit=1" from `microdroid_manager` is a generic process-didn't-start signal — it covers everything from a payload's own logic bug all the way down to a dynamic-linker failure before `main()` ever runs. Don't assume it points at application code without real console output (`DEBUG_LEVEL_FULL`) to confirm where the process actually died.
+
+**Next, not this repo's job**: Warden App is retesting the network-sample-VM path (backlog #20), which hit the identical `libc++.so` bug — expected to now work given it uses the same binary, confirmation pending on their side.
 
 ## Session 9 (2026-09-22) — real root cause found via console output, v1.0.3 shipped
 

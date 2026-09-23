@@ -1,2 +1,4 @@
 knowledge-graph/
 CLAUDE.md
+local-artifacts/
+.context-denylist

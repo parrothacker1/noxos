@@ -60,7 +60,7 @@ The first two attempts were denied by the session's auto-mode permission classif
 
 - Real Soong build + on-device run (v1.0.4) to confirm `libz` linking and the new paths inside Microdroid.
 - Only `classes.dex` is header-checked, not `classes2..N.dex`. Adding them is cheap if wanted.
-- Not committed yet; nothing pushed.
+- Committed as `a56c29f` and pushed to `origin/main`; root meta-repo pointer bumped in `adb8d39` (pushed).
 
 ## Session 9 continued (2026-09-22) — v1.0.3 confirmed working end-to-end, real device, first time ever
 
@@ -266,6 +266,20 @@ Both task types are dispatched through the *same* `libnoxos_payload_stub.so` / `
 **Real, tested today (`noxos-app` side, CI-green, commits `56ff09d` and `bcfda8e`)**: `VmPayloadProtocolTest` covers both task-type byte values and the multi-packet framing (`encodePacketSamples`) encode correctly; `TriggerRouterTest` covers the file-scan `cheap_filter_flagged` response path end-to-end against a fake transport; `NetworkSampleVmDispatcherTest` covers the network-sample response parsing (clean/flagged/malformed-status/thrown-exception, plus that both an outbound and inbound sample land in one request) all against a fake `VmSession`/`VmTransport` — no real VM involved, same as every other VM-touching test in `noxos-app`, since real Microdroid I/O is still Phase-2-gated. None of this exercises a real payload binary — it's the host side of the contract, proven against fakes, waiting on this repo to implement the guest side that actually matches it.
 
 ## Backlog
+
+### File-check ideas and coverage gaps (2026-09-29, session 10, asked for by the root agent for the user; nothing built) — **deferred to next sprint, per the user's explicit call, 2026-09-29**
+
+**Coverage gaps, from reading `noxos-app` code (inferred from code paths, not observed on device):**
+- **A, biggest.** `MainActivity.handleAutoScan()` quarantines *any* non-`Success` result, and `QuarantineManager` deletes the Downloads original. `FileArrivalWatcher` scans every new Downloads file from an untrusted owner, with no type filter. The guest returns status 2 `not a JPEG file` for every clean non-JPEG, non-ZIP file (PDF, PNG, MP4, …) and status 1 `no EXIF APP1 segment` for every JPEG without EXIF (screenshots, recompressed messaging photos). So those are expected to be auto-quarantined as "malformed". VM errors/timeouts are quarantined too (fail-closed), and so are debug-signed APKs now. The fix is a policy/contract call: guest status 0 `{"file_type":"unknown"}` unflagged for unsupported-but-clean files (a one-line guest change), plus the app separating "couldn't analyze" from "suspicious". Fail-open vs fail-closed is the user's decision.
+- **B.** The guest never receives the display name or MIME, so declared-type-vs-content checks (`invoice.pdf` that's an APK/ELF, `photo.jpg.apk`, RTLO U+202E names) are impossible. Needs a wire-format addition on both sides.
+- **C.** Only `MediaStore.Downloads` is watched (not messaging-app media, Documents, DCIM).
+- **D.** The trusted-source ACL keys on `OWNER_PACKAGE_NAME`, usually the browser, so trusting it trusts all web downloads.
+- **E.** Encrypted ZIP entries (general-purpose bit 0) aren't flagged or reported: a cheap miss from this session. Nested archives are scanned one level only.
+
+**Ideas left out of session 10** (all cheap, no execution): PDF keyword counting in the style of Didier Stevens' pdfid (`/JavaScript /JS /OpenAction /AA /Launch /EmbeddedFile /RichMedia /XFA /ObjStm`, `#xx` names normalized, data after `%%EOF`, bad `startxref`); OOXML `vbaProject.bin`, macro content types, `_rels` `TargetMode="External"` (remote template / Follina CVE-2022-30190), and embedded OLE/ActiveX; OLE2 `.doc/.xls` VBA storage names (like oletools oleid); RAR/7z/gzip/tar identification plus appended-data checks; PNG chunk/CRC/IEND-trailer, GIF trailer, and WebP RIFF-size checks; SVG `<script>`/`onload`, HTML smuggling, script one-liner patterns; APK `classes2..N.dex`, dynamic-code-loading strings, high-entropy extensionless assets, low `targetSdkVersion` (needs AXML attribute parsing), `sharedUserId`, native `.so` sanity/packing. Out of cheap scope: fuzzy hashing (TLSH/ssdeep) against a known-bad DB.
+
+**Suggested order:** A > B > E > PDF keywords > OOXML macros/external rels.
+
 
 9. ~~**P7: adversarial test suite** for the EXIF parser (fuzz testing)~~ — **done 2026-08-16**, see above.
 

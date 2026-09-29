@@ -1,6 +1,50 @@
 # noxos-payload — Task List
 
-Last updated: 2026-09-29 (session 10, this repo — **file-scan cheap filter extended to ZIP/APK static checks**, dead task-type-1 network-sample path removed; see the session 10 heading. Before that: session 9 — **exit=1 investigation fully closed**: real root cause found (missing libc++.so in Microdroid's linker namespace), fixed via `stl: "libc++_static"`, released as v1.0.3, and confirmed working end-to-end on a real device — first successful full VM-boot-to-scan-result lifecycle in the project's history). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
+Last updated: 2026-09-29 (session 10 continued, this repo — **backlog A/B/E/PDF/OOXML implemented**, see "Session 10 continued"; earlier in session 10: **file-scan cheap filter extended to ZIP/APK static checks**, dead task-type-1 network-sample path removed; see the session 10 heading. Before that: session 9 — **exit=1 investigation fully closed**: real root cause found (missing libc++.so in Microdroid's linker namespace), fixed via `stl: "libc++_static"`, released as v1.0.3, and confirmed working end-to-end on a real device — first successful full VM-boot-to-scan-result lifecycle in the project's history). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
+
+## Session 10 continued (2026-09-29) — backlog A → B → E → PDF → OOXML implemented (uncommitted)
+
+The user, via the root agent, locked the policy for item A and asked for the backlog in my suggested order. Policy: **fail-open only for unsupported-but-structurally-sane files**. Anything flagged, status 1/2, and VM errors/timeouts stay fail-closed, since those can be evasion rather than "unsupported format".
+
+**Structure change.** All file-scan policy moved out of `payload_main.cpp` into a new `file_scan.{h,cpp}` (`ScanFile`, `StripFileScanMeta`). `payload_main.cpp` now only does vsock + framing, and the whole policy is host-testable (`test/file_scan_test.cpp`) and fuzzable end to end (`fuzz/file_scan_fuzzer.cpp`). Type detection and declared-type checks are in `file_type.{h,cpp}`. The PDF scanner is `pdf_scan.{h,cpp}`. All four are in `Android.bp` `srcs`.
+
+**A: status-0 `file_type` everywhere.** Every status-0 response now has `file_type` (`jpeg png gif webp pdf zip apk ooxml ole2 isobmff mp3 ogg wav rar 7z gzip elf pe dex unknown`, magic-based). A clean file with no deep parser → `{"file_type":"<detected>"}`, unflagged (fail-open). **A real parser bug turned up on the way:** `ParseExif` never stopped at SOS (0xDA), so for any JPEG without EXIF (screenshots, messaging-app photos) it walked into the compressed scan data and returned status 1 `invalid JPEG segment marker`. Verified on a real PIL-generated JPEG before the fix. It now stops at SOS/EOI → `no EXIF APP1 segment`, which `ScanFile` maps to status 0 `{"file_type":"jpeg","exif":"none"}` when the JPEG structural filter is clean. Genuinely malformed EXIF structures (bad APP1 length, bad TIFF header) stay status 1. Warden App shipped its side (`035017f` on noxos-app: labels "file type only, not deeply inspected" separately from an analyzed result). Its quarantine logic already keyed on status/flag, so no policy code change was needed there.
+
+**B: task type 2 = file scan with declared name/MIME.** Framing (pinned with Warden App): `[0x02][u32 BE len][u16 BE name_len][name ≤1024][u16 BE mime_len][mime ≤255][file ≤150 MiB]`. Metadata is stripped in place (`vector::erase`, no second 150 MiB copy). Task 0 is unchanged, so old apps keep working. A new app hitting an old guest gets `unknown task type`, so the rollout is: bump the payload release, then the app sends task 2 with a fallback to task 0. Checks (only after the content scan is clean): Unicode bidi overrides in the name (U+202A–202E, U+2066–2069: the RTLO `gpj.exe` trick); double extensions where the last is executable-ish (`apk exe scr bat cmd com js vbs sh jar dex so hta msi`) and the one before is a decoy (`jpg pdf docx txt mp4 zip…`); extension→accepted-types and MIME→accepted-types tables vs the detected type. **Decision: media↔media mismatches are allowed** (a PNG named `.jpg` is extremely common and harmless), everything else mismatching is flagged, **including a known binary extension whose content is `unknown`** (e.g. a `.jpg` with no JPEG magic, or a truncated `.pdf`). `application/octet-stream` and unknown extensions aren't checked. **Warden App has not started sending task 2**; it flagged it to the root agent as scope needing a greenlight.
+
+**E: encrypted ZIP entries.** Central-directory general-purpose bit 0 → flagged: "ZIP entry X is encrypted; its contents cannot be inspected". This also covers APK "pseudo-encryption" (the bit set to break unzip/apktool while older Android installs anyway). Verified on a real `zip -P` archive. 0 of the 17 real APKs trip it.
+
+**PDF (`pdf_scan.cpp`).** A pdfid-style scan, modeled on Didier Stevens' pdfid, not a PDF parser:
+- **Keywords**: every `/Name` token is decoded (`#xx` hex escapes) and counted against `JS JavaScript OpenAction AA Launch EmbeddedFile RichMedia XFA ObjStm AcroForm JBIG2Decode URI SubmitForm GoToR`.
+- **Inflated streams**: the count runs over the raw bytes **plus every zlib-headed stream, inflated** (≤1 MiB each, ≤16 MiB total, ≤4096 streams), so JavaScript hidden inside a compressed `/ObjStm` is seen. A test proves exactly that case.
+- **Structure**: `%PDF-` offset, last `%%EOF`, non-whitespace bytes after it, and whether `startxref` lands on `xref` or a real `N G obj` header.
+- **Flags**: known-bad signature; data before the header; no `%%EOF`; >1024 bytes after `%%EOF`; any hex-obfuscated keyword name; JavaScript together with OpenAction/AA; any `/Launch`; `startxref` past EOF. An in-bounds but wrong `startxref` is only metadata (readers routinely repair it).
+- **Metadata**: all counts plus the structure fields, always complete (unlike ZIP's early-return; see below).
+
+**Real data drove two rule changes.** Over **188 real PDFs** on this machine: `/OpenAction` appears in 49, `/ObjStm` in 65, `/AA` in 4, `/EmbeddedFile` in 2, and `/JS`/`/JavaScript`/`/Launch` in none.
+- A first "EmbeddedFile + automatic action" rule false-flagged 2 IEEE papers (OpenAction is usually just "open at page N") and was **dropped**. Opening an embedded payload needs JavaScript (`exportDataObject`) or `/Launch`, which the remaining rules cover.
+- The first `startxref` check accepted any digit at the target, and a test caught that offset 5 of `%PDF-1.4` passed. It now requires `xref` or `N G obj`.
+
+Result: **187/188 clean**. The one flag is a genuinely corrupted Telegram download (512 KiB, zero-filled start, no header), which in the real pipeline is detected as `unknown`, not PDF. Largest real PDF (10 MB): ~169 ms at -O2.
+
+**OOXML (in `zip_scan.cpp`).** A ZIP with root `[Content_Types].xml` and no `AndroidManifest.xml` → `file_type:"ooxml"`.
+- **Flags**: any `*vbaProject.bin` (VBA macros); any `*/activeX/*.bin`; and, after inflating each `.rels` part (≤1 MiB, ≤256 files) and scanning `<Relationship>` tags, any `TargetMode="External"` relationship whose type is `attachedTemplate` (remote template injection), `oleObject` (the Follina CVE-2022-30190 vector), `frame`, or `subDocument`.
+- **Not flagged**: external hyperlinks and images, which are common and benign. They're counted in `ooxml_external_rels`, and `ooxml_embeddings` counts `*/embeddings/*`.
+- **Real data**: 123 real OOXML files, **0 flagged** (6 have external hyperlink rels). Five non-OOXML hits in the sweep were all justified: Go mimetype's deliberately truncated `pptx.pptx` fixture, and excelize's `encrypt*.xlsx`, which are OLE2 containers (password-encrypted Office), `ole2` in the real pipeline.
+- Legacy OLE2 `.doc/.xls` macro detection was not done (not in the ordered list).
+
+**Fuzzing (all with `-fno-sanitize-recover=all`).**
+- PDF: the fuzzer found **one more real UBSan bug**, the same `memmem`-null-on-empty-input class as before (in `InflateStreams`). Fixed with a length guard. Then ~224K clean runs (3 min; CPU-bound on purpose, since inputs inflate up to the caps). The 1 MiB inflate buffer is now allocated lazily; it had been memset on every call.
+- ZIP with the new OOXML seed: ~15.9M clean runs.
+- Whole pipeline (`file_scan_fuzzer`, metadata-framed seeds): ~1.09M clean runs.
+- Seeds: `fuzz/seeds_pdf/` (clean, ObjStm-hidden JS, obfuscated name; all synthetic) and `fuzz/seeds_zip/ooxml_external_rel.docx`. **A real personal PDF was briefly copied into `fuzz/seeds_pdf/` by mistake and moved out before any commit.** Seeds must stay synthetic, since this repo is public.
+- CI now builds and runs `pdf_scan_test`, `file_scan_test`, `pdf_fuzzer`, and `file_scan_fuzzer` (60 s each).
+
+**Server-side feature note (root agent: file analysis is going server-only, sending extracted features, never raw files).** The metadata above is intended as that feature source. Two caveats sent to the root agent:
+1. **Raw EXIF values are personal data** (GPS coordinates, device make/model/serial, timestamps), so they shouldn't be forwarded as "features" unredacted.
+2. **ZIP/APK/OOXML flags return early**, so on a flagged ZIP the metadata can be incomplete (e.g. `zip_entries:0` on the encrypted-entry flag). If the server needs complete features on exactly the flagged files, `ScanZip` should collect everything first and flag after, as `ScanPdf` already does.
+
+**Still open from this work:** the app sending task 2; the complete-features refactor of `ScanZip`; OLE2 macro detection; `classes2..N.dex`; the earlier open items (real Soong build for `libz`, device test at 150 MiB).
 
 ## Session 10 (2026-09-29) — static ZIP/APK checks added; dead network-sample path removed
 

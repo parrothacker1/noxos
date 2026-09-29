@@ -1,0 +1,48 @@
+# File-side ML design — real decision, 2026-09-29, not built yet
+
+Companion to `ML-NETWORK-DESIGN.md`, same discipline: document the design before building. Triggered by `PROJECT.md`'s "Reversed 2026-09-29" file-side pivot — `/analyze/file` no longer gets raw bytes, a flagged+quarantined file now sends **extracted features only**, same privacy posture as the network side. No on-device model for files, ever — this is server-only inference; the on-device side (`noxos-payload`'s Microdroid cheap filter) only ever extracts and forwards features, never runs a model itself.
+
+## Real feature source: `noxos-payload`'s cheap-filter JSON, not a new extraction pass
+
+Per `noxos-payload/TASKS.md` session 10 (2026-09-29), the guest-side cheap filter already computes, per file type, real structured output — this is what gets forwarded, not raw bytes:
+
+- **APK** (the dominant file type Warden actually handles, per `PROJECT.md`'s "APKs, images, docs" framing): `apk_signing` (`none`/`v1`/`v2`/`v3`/`v3.1`/`unsigned`/debug-cert flag), `permission_strings` (deduplicated list of every `.permission.` string in the AXML pool), a fixed **14-item high-risk permission count** (SMS send/receive/read, MMS, call log, outgoing calls, `CALL_PHONE`, accessibility, device admin, notification listener, `REQUEST_INSTALL_PACKAGES`, `SYSTEM_ALERT_WINDOW`, contacts, audio) plus the SMS+accessibility combo flag, `classes.dex` header sanity fields and sample entropy (real measured range on this machine: 5.24-6.73 normal, >7.2 flagged as packed/encrypted), plus `zip_entries`/structural ZIP flags (an APK is a ZIP).
+- **ZIP** (non-APK archives): structural flags only — EOCD/appended-data, duplicate/mismatched local-vs-central names, overlapping entries, zip-slip paths, declared-size zip-bomb ratio, content-vs-extension mismatch count. No permission/signing data (not an APK).
+- **JPEG**: EXIF tag values (existing parser, predates this session).
+- **ELF/PE/other**: whole-file entropy, known-bad signature scan hits (EICAR, Metasploit strings, `UPX!` marker).
+
+## Real datasets checked against this extraction surface, not assumed
+
+Per the user's explicit correction: don't design a feature schema blind, check what's actually labeled and available first, same as the network side's UNSW-NB15 schema-first discipline.
+
+- **Drebin** (5,560 malware / 123,453 benign Android APKs; features = permissions, intents, hardware components, API calls, app components): **closest real fit to what `noxos-payload` extracts today.** Its permission-based features map directly onto `permission_strings`/`high_risk_permissions`. Its intent/component/API-call features do **not** currently have a `noxos-payload` extraction path — no AXML intent-filter parsing, no API-call-graph extraction exists yet. Real, honest gap, not glossed over: a Drebin-trained model using only what's extractable today loses signal Drebin itself considers useful.
+- **CICMalDroid2020** (17,341 apps, 5 labeled categories — Adware/Banking/SMS/Riskware/Benign): broader feature set (intents, permissions, services, file-type counts, obfuscation flags, sensitive API invocations, system calls, network captures). **Only the static subset is usable** — this project's file-scan stays no-execution by design (matches the "no general malware-detonation engine" scope boundary in `PROJECT.md`'s pillar 2), so the dynamic/behavioral columns (system calls, network captures) aren't reproducible from a Microdroid cheap-filter pass and are excluded. Usable overlap with real extraction: same as Drebin's, permissions only, until intent/service parsing is built.
+- **CIC-Evasive-PDFMal2022** (10,025 records, 32 features, OpenAction/JavaScript keyword counts): matches the pdfid-style PDF checks already proposed but explicitly **deferred, not built** in `noxos-payload/TASKS.md` session 10's "Ideas left out" list — there is currently **zero PDF extraction path** in the cheap filter. Out of scope for V1 for that reason, not a data problem.
+
+## V1 scope decision: APK-only classifier, everything else stays rule-based
+
+Given the real extraction-vs-label intersection above, real ML scoring for V1 covers **APKs only**, using **only the permission-based features `noxos-payload` already extracts** (`permission_strings` presence vector over the 14 high-risk permissions plus a total-count, `high_risk_permission_count`, the SMS+accessibility combo flag, `apk_signing` scheme, `classes.dex` sample entropy). This is the one file type with both (a) a real labeled dataset (Drebin, 123K+ real benign APKs and 5.5K+ real malware APKs — no more "scarce labels" problem, unlike the earlier synthetic-signature-only assumption) and (b) a close-enough real extraction match today.
+
+**JPEG, generic ZIP, ELF/PE, and PDF stay exactly as they are** — the existing rule-based cheap-filter flags (structural ZIP checks, entropy threshold, known-bad-signature scan) plus ClamAV remain the only line of defense for those file types in V1. This directly answers the "replace or supplement ClamAV" question from the relayed ask: **supplements for APKs, doesn't touch ClamAV's role for everything else** — there's no real dataset to train against for those file types yet, so building an ML layer for them now would be guessing, not modeling.
+
+## Model choice: supervised classifier, not an anomaly-detector — reversing the earlier assumption now that real labels exist
+
+Before Drebin/CICMalDroid2020 were confirmed real and available, the working assumption here was that file-malware labels were as scarce as EICAR/Metasploit test strings, making an unsupervised anomaly-detector (mirroring the network-side autoencoder) the only honest option. **That assumption doesn't hold once real datasets are in the picture** — Drebin alone has more labeled malware samples (5,560) than this project's entire network dataset has distinct attack feature-patterns' worth of signal to spare, and a clean binary benign/malware label beats an unsupervised proxy every time real labels exist. **Real decision: XGBoost binary classifier**, same tool and same reasoning as the network teacher/student models — cheap to host, no GPU, the right tool for a structured, mostly-categorical/count feature vector, and it keeps this repo's tooling consistent (one ML library across every model except the autoencoder, which needed real gradient-based multi-head loss training that XGBoost can't do).
+
+**Not decided yet, needs real experimentation once built**: whether CICMalDroid2020's static-feature subset trains a second, complementary model (its 5-category labels — Adware/Banking/SMS/Riskware — could support a richer `reasoning` string than Drebin's binary label, e.g. "flagged, permission pattern matches known SMS-fraud apps" instead of just "flagged") or serves only as a held-out generalization check against a Drebin-trained model. Real call once real training data is in hand, not guessed at here.
+
+## Real gap to close before this is buildable, flagged not solved here
+
+`noxos-payload` currently extracts permission **strings** (deduplicated `.permission.` matches) and a fixed 14-item high-risk count — it does **not** currently expose the **full per-permission presence vector** the way Drebin's own feature format does (Drebin uses a much larger fixed permission/feature vocabulary, ~130+ possible features). Two options, not decided:
+1. Train narrowly on just the ~15 features (14 high-risk + total count) already extracted — less signal than Drebin's own published benchmarks would suggest, but zero new `noxos-payload` work.
+2. Extend `noxos-payload`'s AXML permission-string extraction to emit the full matched-permission list (it already parses the full pool, per session 10 — `permission_strings` already **is** the full deduplicated list, not just the high-risk subset) and build the feature vector server-side from that list against Drebin's own permission vocabulary, getting much closer to Drebin's real reported accuracy.
+
+Re-reading session 10 more carefully: `permission_strings` is already every `.permission.` match, not just the high-risk 14 — so **option 2 needs zero new `noxos-payload` work**, only server-side feature engineering (map the forwarded `permission_strings` list against Drebin's known vocabulary, one-hot/multi-hot). This is the real design call: **build the full permission-vocabulary feature vector, not just the narrow 15-feature version** — the data to do this is already being extracted, just not yet used that way.
+
+## Escalation contract (mirrors the network side's shape, not re-derived)
+
+Same JSON-first, no-raw-bytes contract as `PROJECT.md`'s reversed file-side design: a pVM-cheap-filter-flagged APK forwards its already-computed cheap-filter JSON (not the file) to a new `/analyze/file` request shape. Server maps the forwarded `permission_strings`/`high_risk_permissions`/`apk_signing`/dex-entropy fields into the locked feature vector, predicts, returns the same `verdict`/`safety_score`/`reasoning` shape `/analyze/network` already uses (see the explainability work below for what `reasoning` actually contains). Exact request/response JSON schema: not written yet, next step once the feature vocabulary (full-permission-list vs. narrow-15) is decided for real against real Drebin training numbers, not guessed at here.
+
+## Status: design only, not implemented
+
+No training data downloaded, no code written. Real next step: fetch Drebin, build the permission-vocabulary feature vector from its own format, train an XGBoost classifier, report real held-out numbers — same rigor as every other model in this project, not a single guess.

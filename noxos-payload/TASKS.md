@@ -2,6 +2,27 @@
 
 Last updated: 2026-09-29 (session 10 continued, this repo — **backlog A/B/E/PDF/OOXML implemented**, see "Session 10 continued"; earlier in session 10: **file-scan cheap filter extended to ZIP/APK static checks**, dead task-type-1 network-sample path removed; see the session 10 heading. Before that: session 9 — **exit=1 investigation fully closed**: real root cause found (missing libc++.so in Microdroid's linker namespace), fixed via `stl: "libc++_static"`, released as v1.0.3, and confirmed working end-to-end on a real device — first successful full VM-boot-to-scan-result lifecycle in the project's history). Read [`../README.md`](../README.md) (hub) and [`../PROJECT.md`](../PROJECT.md) (architecture, source of truth) first for cross-repo context — this file is `noxos-payload`'s own task history, split out from the old combined `TASKS.md` (now just an index at `../TASKS.md`). See also this repo's own [`README.md`](README.md).
 
+## Session 10, round 2 (2026-09-30) — remaining file-check backlog, one commit per item
+
+**Shipped so far.** v1.0.4 (built from `92f34c1` by NoxOS building AWS, 2026-09-29): task 2 + A/E/PDF/OOXML + ScanZip refactor; static `libz` was accepted by Soong on both ABIs and `readelf -d` NEEDED shows no `libz.so`/`libc++.so`, closing the open risk from the earlier "zlib" note. The APK `permissions` array (Warden App's request for the server-side `/analyze/file` client) is `c1ba94b`: deduplicated `.permission.` strings, first-seen order, printable ASCII, ≤256 bytes each, ≤2000 entries, no package name or component names; `permission_strings` still counts all. Verified on 22 real APKs (valid JSON, list length == count, no duplicates). v1.0.5 requested from `c1ba94b` (the release hold was lifted by the user via the root agent).
+
+### PNG / GIF / WebP structure (`image_scan.{h,cpp}`)
+
+Same declared-length-vs-actual idea as the EXIF `seg_len` fix and the JPEG trailer check, applied to the other common image formats, so a screenshot or "photo" can't smuggle a payload behind a valid header:
+- **PNG**: full chunk walk from `IHDR` (must be first, 13 bytes) to `IEND`; every chunk's length must fit in the file, type bytes must be letters, and **every CRC32 is verified with zlib** (cost is one pass over the file). Flags: truncated chunk, missing `IEND`, CRC mismatches (counted), data after `IEND`.
+- **GIF**: header, logical screen descriptor, global colour table, then a block walk (extensions and image descriptors with sub-block chains) to the `0x3B` trailer. Flags: block running past EOF, unknown block type, missing trailer, data after trailer.
+- **WebP**: RIFF size must fit the file, the first chunk must be `VP8 `/`VP8L`/`VP8X`, every chunk (padded to even) must stay inside the RIFF size and the chunks must exactly tile it. Data after the RIFF is "trailing".
+- **Common**: trailing data is flagged if it contains another format's magic anywhere in it (new shared `FindForeignMagic` in `scan_util.h`: ZIP, gzip, ELF, PDF, PHP, `<script`, DEX, RAR, 7z; the 2-byte `MZ` and `#!` count only at the very start of the trailer to avoid noise) or exceeds 4096 bytes. Also flagged: the known-bad signature list, and a declared size above 2^28 pixels (decompression-bomb pixel count).
+- **Features emitted** (every image, complete even when flagged): `image_width`, `image_height`, `image_chunks`, `image_trailing_bytes`, `image_crc_errors`, `image_structure_ok`.
+
+**Real data (24,840 files)**: every PNG, GIF and WebP on this machine (24,408 / 297 / 135) scanned under ASan+UBSan with 0 sanitizer errors. **Flagged 5, all genuinely defective, 0 false positives**: three are Go's deliberately invalid `image/png` testdata (`invalid-noend`, `invalid-crc32`, `invalid-trunc`); `lld/html/_static/logo.png` has a bad IDAT CRC followed by a mangled `IEND` (a byte dropped from the file, consistent with a text-mode transfer); nmap's `pixel.gif` has a comment extension declaring 30 bytes but holding 10, so the block walk runs off the end (a hand-crafted or buggy file; decoders differ on it, so this one is the flag most likely to bother a real user). Six files named `.png` aren't PNGs at all (they start with `EF BF BD`, a UTF-8 replacement character: also text-mode-mangled); they are typed `unknown` and would only be flagged in task 2 by the declared-type check.
+
+Tests: `test/image_scan_test.cpp` (built-in PNG/GIF/WebP builders; ~25 cases including CRC, truncation, trailing ZIP/ELF/PDF, oversized trailer, benign zero padding, pixel bomb, bad IHDR, unknown GIF block, bad RIFF size). The pipeline test now builds a real valid PNG; one of its expectations changed because the old stub `PNG` header is now (correctly) flagged. Fuzz: `fuzz/image_scan_fuzzer.cpp` + `fuzz/seeds_image/` (synthetic), **2.07M clean runs** in 2 min with `-fno-sanitize-recover=all`. CI runs the new test and a 60 s fuzz pass; the pipeline build lines gained `image_scan.cpp`.
+
+### Paused 2026-09-30 (credit conservation; root agent's instruction)
+
+Stopped after the image-structure item. Hourly cron cancelled. Tree is clean and everything is pushed (`6f777a6`); the root repo's `noxos-payload` pointer is **not** bumped past `ea6700a`. **Not started, in the order I'd do them:** OLE2 (`.doc/.xls/.ppt`) macro detection (CFB directory walk for `VBA`/`_VBA_PROJECT`/`Macros`, plus `EncryptedPackage` for password-protected Office; real OLE2 files for testing are listed by a magic-byte scan of `/home`, `/usr`, `/opt`, `/var`, `/srv`, result in the job tmp dir, not persisted); RAR/7z/gzip/tar identification with appended-data checks (7z start-header CRC and `32 + next_header_offset + size == file size` is the cheap strong one; gzip trailer/zip-bomb ratio; tar header-checksum and path-traversal walk, shared with gzip via a streaming inflate); `classes2..N.dex` header checks (extend `CheckDex` over every `classes*.dex`); HTML/SVG smuggling patterns. **Release status:** v1.0.4 (`92f34c1`) is published; v1.0.5 (APK `permissions` array, `c1ba94b`) was requested from NoxOS building AWS and is pending on their side, as far as I know; `6f777a6` (image checks) is not in any release yet.
+
 ## Session 10 continued (2026-09-29) — backlog A → B → E → PDF → OOXML implemented (uncommitted)
 
 The user, via the root agent, locked the policy for item A and asked for the backlog in my suggested order. Policy: **fail-open only for unsupported-but-structurally-sane files**. Anything flagged, status 1/2, and VM errors/timeouts stay fail-closed, since those can be evasion rather than "unsupported format".
@@ -50,6 +71,8 @@ Result: **187/188 clean**. The one flag is a genuinely corrupted Telegram downlo
 
 - `noxos-payload` `92f34c1` feat: fail open on sane unsupported files, add declared-type task, encrypted-ZIP, PDF, and OOXML checks (pushed)
 - root `noxos` `ea6700a` chore: sync noxos-payload submodule pointer (pushed)
+- `noxos-payload` `c1ba94b` feat: report deduplicated APK permission names in the scan response (pushed)
+- `noxos-payload` `6f777a6` feat: add PNG, GIF, and WebP structure checks (pushed)
 
 **Still open from this work:** the app sending task 2 (greenlit, needs a payload release); OLE2 macro detection; `classes2..N.dex`; the earlier open items (real Soong build for `libz`, device test at 150 MiB).
 

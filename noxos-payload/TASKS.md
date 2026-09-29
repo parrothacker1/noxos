@@ -44,7 +44,14 @@ Result: **187/188 clean**. The one flag is a genuinely corrupted Telegram downlo
 1. **Raw EXIF values are personal data** (GPS coordinates, device make/model/serial, timestamps), so they shouldn't be forwarded as "features" unredacted.
 2. **ZIP/APK/OOXML flags return early**, so on a flagged ZIP the metadata can be incomplete (e.g. `zip_entries:0` on the encrypted-entry flag). If the server needs complete features on exactly the flagged files, `ScanZip` should collect everything first and flag after, as `ScanPdf` already does.
 
-**Still open from this work:** the app sending task 2; the complete-features refactor of `ScanZip`; OLE2 macro detection; `classes2..N.dex`; the earlier open items (real Soong build for `libz`, device test at 150 MiB).
+**ScanZip refactor: collect everything, flag at the end** (root agent's recommendation; flagged files' metadata is now the server feature payload, so incomplete features on exactly those files would break the schema). `ScanZipImpl` no longer returns at the first finding. A `Flags` collector keeps the **first** reason (so `cheap_filter_reason` text is unchanged for the app and every existing test) and counts all of them. Early exit happens only when nothing further can be parsed: no EOCD, EOCD comment past EOF, central directory out of bounds, a ZIP64 marker; a broken central-directory walk stops the walk but keeps the entries collected so far. Encrypted entries are never inflated. `CheckDex` records every DEX finding instead of the first. New feature keys: `zip_encrypted_entries`, `zip_uncompressed_total`, `zip_flag_count` (always), and for APKs `dex_version` and `dex_entropy` (3 decimals; only when a ≥4 KiB body sample exists). Real-file sweep after the refactor: identical flags (13 debug-signed APKs, 5 non-ZIP Office files), 0 sanitizer errors, `zip_flag_count` 0 or 1 everywhere. Tests: all 5 suites pass. ZIP fuzz: 4.14M clean runs in 3 min (slower per input than before, as expected, since it no longer stops at the first flag).
+
+**Unsigned commits (for the retroactive GPG pass).** The user's standing instruction (2026-09-29, via the root agent): commit with `--no-gpg-sign` until further notice. Every commit up to and including `a56c29f` (payload) and `adb8d39` (root) is signed (`%G?` = G). Unsigned commits from here on are listed below as they're made:
+
+- `noxos-payload` `92f34c1` feat: fail open on sane unsupported files, add declared-type task, encrypted-ZIP, PDF, and OOXML checks (pushed)
+- root `noxos` `ea6700a` chore: sync noxos-payload submodule pointer (pushed)
+
+**Still open from this work:** the app sending task 2 (greenlit, needs a payload release); OLE2 macro detection; `classes2..N.dex`; the earlier open items (real Soong build for `libz`, device test at 150 MiB).
 
 ## Session 10 (2026-09-29) — static ZIP/APK checks added; dead network-sample path removed
 

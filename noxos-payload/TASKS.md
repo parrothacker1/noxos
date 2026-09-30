@@ -354,6 +354,8 @@ Both task types are dispatched through the *same* `libnoxos_payload_stub.so` / `
 
 **Suggested order:** A > B > E > PDF keywords > OOXML macros/external rels.
 
+**Known risk, left as is by the user's call (2026-09-30): the `>= 4` high-risk-permission rule in `zip_scan.cpp` (`kHighRiskFlagCount`) quarantines.** The rule counts 14 permissions (SMS, call log, `CALL_PHONE`, accessibility, device admin, notification listener, `REQUEST_INSTALL_PACKAGES`, `SYSTEM_ALERT_WINDOW`, `READ_CONTACTS`, `RECORD_AUDIO`) and flags at 4 or more. Popular messaging and dialer apps (WhatsApp, Telegram, Truecaller) can plausibly hit that and would be flagged and quarantined. It has never been measured on popular real APKs (the 17 tested were Warden builds, a demo app and test drivers). On Drebin the rule scores F1 0.255 (recall 0.16), versus 0.920 for the advisory `/analyze/file` model. If revisited: test on popular real APKs, and downgrade the count to advisory metadata, keeping quarantine only for strong combinations such as SMS + accessibility.
+
 
 9. ~~**P7: adversarial test suite** for the EXIF parser (fuzz testing)~~ — **done 2026-08-16**, see above.
 

@@ -161,7 +161,7 @@ The path-dependent TreeSHAP algorithm [5] (the algorithm behind `shap.TreeExplai
 2. **Duplicate patterns drive both leakage and a threshold cliff.** The dataset has 1.2M distinct patterns in 2.28M rows. Beyond leaking across random splits, duplication concentrated ~90% of attacks at one reconstruction error and produced an F1 cliff (0.75 to 0.076 between the 92nd and 93rd percentile).
 3. **Evaluation set construction can silently invalidate a metric.** A grouped split put all TCP attacks in the training side, so a held-out F1 of 0.852 had no TCP attacks in it. Stratifying on label and protocol together exposed TCP F1 of 0.28-0.35. Always report per-protocol (per-stratum) results.
 4. **Dataset generator artifacts** (TTL 29 vs 252) can supply most of a model's apparent accuracy; check any feature that is a property of the capture setup rather than of behavior.
-5. **Silent degradation of explanations.** The published teacher and student models predate the export extension that adds per-node cover; with zero cover the TreeSHAP division is 0/0 and every attribution is NaN, so the server returned a generic "nothing stood out" sentence for every request. Fixed by re-publishing models with cover and by returning an explicit `reasoning: null` when a model has no coverage statistics (with tests).
+5. **Silent degradation of explanations.** The teacher and student models first published predated the export extension that adds per-node cover; with zero cover the TreeSHAP division is 0/0 and every attribution is NaN, so the server returned a generic "nothing stood out" sentence for every request. Fixed on 2026-10-10 by re-publishing both models with cover (teacher v1791623224, student v1791623396; a local server run against the new teacher now returns a real TreeSHAP sentence, not the fallback) and by returning an explicit `reasoning: null` when a model has no coverage statistics (with tests).
 6. **Under-specified contracts cost round trips.** The autoencoder export originally omitted the input transforms (they lived only in messages) and left open whether the numeric loss term is a mean or a sum (a sum would inflate it ~9x against the calibrated threshold). The export now carries `numeric_transforms`, `numeric_reduction`, per-protocol `reconstruction_thresholds`, and golden test vectors.
 7. **Train/serve unit mismatch** is the main validity risk for network models: dataset rows are whole-flow records at the IP layer, while the app scores per destination IP early in the flow with different byte counting, chunk-counted inbound packets, TCP/UDP only. This is why the final autoencoder was rebuilt from per-packet data truncated to the first 30 s.
 8. **Resource limits on tiny instances.** Compiling the Go server on a 1 GiB instance was killed by the out-of-memory killer (46 minutes, no service); the fix is to cross-compile and ship a SHA-256-verified static binary.
@@ -186,11 +186,11 @@ Repository: `github.com/parrothacker1/noxos-inference`. Code lives on topic bran
 
 | component | branch @ commit | release tag (latest) | model.json SHA-256 | CI run |
 |---|---|---|---|---|
-| teacher (production, with cover) | `teacher-xgboost` @ 0df9183 | `teacher-latest` | TBD-TEACHER-SHA | TBD-TEACHER-RUN |
-| student (with cover) | `student-xgboost` @ e0d4b43 | `student-latest` | TBD-STUDENT-SHA | TBD-STUDENT-RUN |
+| teacher (production, with cover) | `teacher-xgboost` @ 0df9183 | `teacher-latest` | 4e108fa98ea890ac153c4580a73318ad0a4ff97f883e2049182b55c22d6fe524 (v1791623224) | 38039833310 (earlier: 35819294512) |
+| student (with cover) | `student-xgboost` @ e0d4b43 | `student-latest` | 1e564271588e73d9fd1b5102d08f2b28120b4385f5538a6359d192f88a8ab0d0 (v1791623396) | 38040268937 (earlier: 35819656301) |
 | file classifier (advisory) | `file-classifier` @ a577db9 | `file-latest` (v1790706350) | `7edf44588f7370cbd8b4ed46719216289ff3dc8a8e58b0e955d9abd84edb8224` | 36611942530 |
 | autoencoder (MIRAGE; published by hand) | `filter-autoencoder` @ 657d956 | `autoencoder-latest` (v1790722998) | `e6cd5822c8c27718d2a7835d21bdc9a51537885ad0e24a8ff0906e59300c2206` | manual (CI disabled: archive too large) |
-| server (Go, TreeSHAP, hot reload) | `teacher-server` @ b06fc49 | `teacher-server-latest` | TBD-SERVER-SHA | n/a (cross-compiled by hand) |
+| server (Go, TreeSHAP, hot reload) | `teacher-server` @ b06fc49 | `teacher-server-latest` | 38bec4fc4afef4e826249747c853b1c656a81558bc618bb4ad714e98c141dfc0 | n/a (cross-compiled by hand) |
 
 Earlier CI runs for reference: teacher 35793397584, student 35793896196, production teacher 35819294512, student retrain 35819656301; autoencoder (UNSW, deprecated) 36494365223 and 36605909523. Older releases `autoencoder-1790636404` and `autoencoder-1790704070` are marked DEPRECATED.
 

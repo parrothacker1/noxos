@@ -81,6 +81,7 @@ Result: **187/188 clean**. The one flag is a genuinely corrupted Telegram downlo
 - `noxos-payload` `c1ba94b` feat: report deduplicated APK permission names in the scan response (pushed)
 - `noxos-payload` `6f777a6` feat: add PNG, GIF, and WebP structure checks (pushed)
 - `noxos-payload` `feab206` fix: mask built-in signatures so the payload stops flagging itself, and count PDF names only in object streams (pushed)
+- root `context` branch `96b888d` docs: add payload paper results (committed in the NoxOS-context worktree, unsigned, **not pushed**; it also carried other sessions' pending knowledge-graph edits)
 
 **Still open from this work:** the app sending task 2 (greenlit, needs a payload release); OLE2 macro detection; `classes2..N.dex`; the earlier open items (real Soong build for `libz`, device test at 150 MiB).
 

@@ -422,3 +422,8 @@ Same algorithm applies to both `OnDeviceNetworkClassifier` (student model) and `
 
 - `xgboost-classifier` — **renamed from `feature/on-device-xgboost-classifier` (user's explicit request), then fast-forward-merged into `main`** (see "xgboost-classifier: full pipeline shipped to main" above for what it contains) so its `workflow_dispatch` CI could actually run. **Deleted 2026-09-23** as part of the full repo reset above — do not try to resurrect or reference this branch, it and its releases are gone.
 - `feature/ml-server-architecture` — still open, for the heavier server-side ML workload/architecture, still being actively figured out (not scoped yet beyond "this is where that work will land"). **Deleted 2026-09-23**, superseded by `teacher-server` above.
+
+## Live TreeSHAP coverage fix (2026-10-10)
+- Old teacher/student releases lacked per-node cover, so TreeSHAP gave NaN and the server returned the generic fallback. Server now returns `reasoning: null` when cover is missing (teacher-server b06fc49, tests added).
+- Re-published teacher-latest v1791623224 (CI 38039833310) and student-latest v1791623396 (CI 38040268937): cover on every node, top-level feature_scale. Metrics unchanged. Local server run confirmed real reasoning. New server binary sha256 38bec4fc...dfc0.
+- On-device parser must ignore unknown fields (feature_scale, per-node cover) and compare splits in float32.

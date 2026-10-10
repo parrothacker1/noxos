@@ -118,9 +118,24 @@ False-flag rate on normal traffic from apps never seen in training, mean (min-ma
 | 97 | 0.0430 (0.0145-0.0918) | 0.0212 (0.0064-0.0347) | 0.1836 (0.0625-0.3553) |
 | 99 | 0.0196 (0.0049-0.0408) | 0.0073 (0.0021-0.0129) | 0.0909 (0.0077-0.1944) |
 
-**Shipped configuration (TCP 97th, UDP 99th): normal TCP flagged 2.1% (0.6-3.5%), normal UDP flagged 9.1% (0.8-19.4%).** UDP calibration is thin (132-807 calibration UDP rows per split) and varies strongly by which apps are held out. Choosing the threshold percentile per protocol from the same splits makes these rates slightly optimistic.
+**First-publication configuration (TCP 97th, UDP 99th; the UDP part was superseded, see 3.5.1): normal TCP flagged 2.1% (0.6-3.5%), normal UDP flagged 9.1% (0.8-19.4%).** UDP calibration is thin (132-807 calibration UDP rows per split) and varies strongly by which apps are held out. Choosing the threshold percentile per protocol from the same splits makes these rates slightly optimistic.
 
 Synthetic anomaly shapes defined by us in feature space (**sanity checks, not validation**; detected fraction, mean (min-max)): at the shipped thresholds SYN-scan-like 44% (0-75%), UDP-flood-like 99% (98-100%), big-upload-like 99% (97-100%). With `log1p` scaling instead of `sqrt`, big uploads were detected only 57% (0-90%) at the 97th percentile, which motivated the change; `sqrt` raised normal UDP false flags (13.8% to 22.8% at the 97th percentile, 3-split comparison).
+
+#### 3.5.1 UDP threshold recalibration (v1791661543, 2026-10-11)
+
+Trigger: on a Cuttlefish device the app flagged 15 of 15 fresh UDP destinations as unusual, including 4 real DNS exchanges (errors 0.14-0.27 against the 0.125 threshold). These were tiny test flows on one device, so a true rate is unmeasured; the threshold was deliberately not tuned to them. Instead the rule was changed on MIRAGE alone, weights and contract untouched.
+
+Problem with the old rule: one split's calibration apps (132-807 UDP rows) gave thresholds from 0.125 to 0.499 across the five splits, and YouTube alone is 69% of pooled UDP rows.
+
+New rule: the 99th percentile of normal UDP error pooled over out-of-fold rows of all five splits (each scored by a model that never saw its app), every app weighted equally. Shipped UDP threshold 0.125071 -> **0.429368**; TCP 0.322667 unchanged. Leave-split-out evaluation (threshold from the other splits, excluding the evaluated split's test apps), mean (min-max) over 5 splits:
+
+| rule | UDP false-flag, unseen apps | per-app mean | synthetic UDP flood detected | DNS-like MIRAGE flows flagged |
+|---|---|---|---|---|
+| old: 99th of one split's calibration | 5.9% (0.3-19.4%) | 3.3% (0.2-9.5%) | 98.1% (95.9-99.9%) | 14.3% (0-40%) |
+| new: app-balanced pooled 99th | **2.2% (0-5.1%)** | 1.6% (0-6.2%) | 94.6% (86.3-99.3%) | 6.1% (0-26.5%) |
+
+Cost: UDP flood sensitivity drops by about 3.5 points on average, and in the worst split to 86%. DNS-like means at most 3 source packets, under 400 source bytes and under 2000 destination bytes; MIRAGE has no port-53 traffic, so this is a shape proxy (Spotify discovery, STUN, DHCP) and real DNS remains untested in training. Rerunning the old procedure gave 5.9% where the first publication reported 9.1%: training is not bit-reproducible between runs. Plain higher percentiles of the calibration set were rejected: 99.9th and the maximum still left up to 8-10% on a bad split because the threshold itself was unstable. Not fixed: F1 is still unmeasured, and a few percent of normal UDP is still flagged. Reproduce with `training/recalibrate_udp.py`.
 
 Proxy check (scoring UNSW-NB15 with the MIRAGE-trained model) gave F1 0.18-0.29 overall, ~0.05 on TCP, and rated UNSW normal TCP as *more* anomalous (median error 0.572) than UNSW attack TCP (0.217). It measures the gap between two networks, not attacks, and is **discarded**.
 
@@ -189,7 +204,7 @@ Repository: `github.com/parrothacker1/noxos-inference`. Code lives on topic bran
 | teacher (production, with cover) | `teacher-xgboost` @ 0df9183 | `teacher-latest` | 4e108fa98ea890ac153c4580a73318ad0a4ff97f883e2049182b55c22d6fe524 (v1791623224) | 38039833310 (earlier: 35819294512) |
 | student (with cover) | `student-xgboost` @ e0d4b43 | `student-latest` | 1e564271588e73d9fd1b5102d08f2b28120b4385f5538a6359d192f88a8ab0d0 (v1791623396) | 38040268937 (earlier: 35819656301) |
 | file classifier (advisory) | `file-classifier` @ a577db9 | `file-latest` (v1790706350) | `7edf44588f7370cbd8b4ed46719216289ff3dc8a8e58b0e955d9abd84edb8224` | 36611942530 |
-| autoencoder (MIRAGE; published by hand) | `filter-autoencoder` @ 657d956 | `autoencoder-latest` (v1790722998) | `e6cd5822c8c27718d2a7835d21bdc9a51537885ad0e24a8ff0906e59300c2206` | manual (CI disabled: archive too large) |
+| autoencoder (MIRAGE; published by hand) | `filter-autoencoder` @ 657d956 / 07ebe25 | `autoencoder-latest` (v1791661543, UDP threshold recalibrated, @ 07ebe25; v1790722998 sha `e6cd5822c8c27718d2a7835d21bdc9a51537885ad0e24a8ff0906e59300c2206` superseded) | `ba13d20e3f118b6247a5b5d9c11162b30b7b148204dc14c7d5d8e3cd7b218950` | manual (CI disabled: archive too large) |
 | server (Go, TreeSHAP, hot reload) | `teacher-server` @ b06fc49 | `teacher-server-latest` | 38bec4fc4afef4e826249747c853b1c656a81558bc618bb4ad714e98c141dfc0 | n/a (cross-compiled by hand) |
 
 Earlier CI runs for reference: teacher 35793397584, student 35793896196, production teacher 35819294512, student retrain 35819656301; autoencoder (UNSW, deprecated) 36494365223 and 36605909523. Older releases `autoencoder-1790636404` and `autoencoder-1790704070` are marked DEPRECATED.

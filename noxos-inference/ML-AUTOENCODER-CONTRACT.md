@@ -54,12 +54,12 @@ Release `autoencoder-latest` on `parrothacker1/noxos-inference`: `model.json`, `
 
 ## Thresholds
 
-One per protocol, set on calibration data of that protocol (TCP at the 97th percentile, UDP at the 99th, of normal traffic from apps held out of training). They change on every retrain: **always read them from `model.json`.**
+One per protocol, set on calibration data of that protocol (TCP at the 97th percentile of calibration-app error; since v1791661543 UDP is the 99th percentile of pooled out-of-fold normal UDP error with every app weighted equally, see METRICS.md). They change on every retrain: **always read them from `model.json`.**
 
 ## Measured behaviour (MIRAGE, unseen apps, mean over 5 app splits; details in METRICS.md)
 
-- Normal traffic flagged: **TCP 2.1% (0.6-3.5%), UDP 9.1% (0.8-19.4%)**.
-- Synthetic shapes I defined (sanity only): UDP flood 99%, big upload 99%, SYN scan 44% (0-75%).
+- Normal traffic flagged: **TCP 2.1% (0.6-3.5%), UDP 2.2% (0-5.1%) with the v1791661543 UDP threshold 0.429368 (leave-split-out; the 99th-percentile calibration rule it replaces gave 5.9% (0.3-19.4%) on the same procedure and 9.1% in the first publication)**.
+- Synthetic shapes I defined (sanity only): UDP flood 94.6% (86.3-99.3%) (was 98.1%), big upload 99%, SYN scan 44% (0-75%).
 - F1 is **not measurable** (no attacks). Awaits Warden-logged traffic plus deliberate test traffic.
 
 ## Known weaknesses (accepted)
@@ -71,9 +71,9 @@ UDP calibration is thin (132-807 calibration rows per split) and UDP false flags
 **TCP sample (not flagged)**  
 `input`: `{"proto": "tcp", "dst_port": 80.0, "src_byte_count": 102123.89269626162, "src_packet_count": 1894.6602989194519, "dst_byte_count": 5167702.0398060735, "duration_millis": 19908.723520133364, "handshake_latency_millis": 50.00185966491699, "smean": 53.90089862256793}`  
 expected reconstruction error `0.021474`, threshold `0.322667`, flagged `false`
-**UDP sample (flagged)**  
+**UDP sample (not flagged)**  
 `input`: `{"proto": "udp", "dst_port": 44790.0, "src_byte_count": 197483.59723275586, "src_packet_count": 340.5582810061172, "dst_byte_count": 109026.41195575793, "duration_millis": 12103.02585013446, "handshake_latency_millis": 0.0, "smean": 579.8819416439578}`  
-expected reconstruction error `0.140742`, threshold `0.125071`, flagged `true`
+expected reconstruction error `0.140742`, threshold `0.429368`, flagged `false` (was flagged `true` at the old threshold 0.125071)
 **TCP big upload (flagged)**  
 `input`: `{"proto": "tcp", "dst_port": 443.0, "src_byte_count": 40000000.0, "src_packet_count": 30000.0, "dst_byte_count": 50000.0, "duration_millis": 20000.0, "handshake_latency_millis": 30.0, "smean": 1333.3333333333333}`  
 expected reconstruction error `17.171206`, threshold `0.322667`, flagged `true`

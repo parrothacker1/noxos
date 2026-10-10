@@ -1,0 +1,20 @@
+# Citations verified 2026-10-11 (web search by root agent)
+
+Status: VERIFIED = confirmed by a search result from an independent page; NVD pages render with JavaScript and could not be fetched directly, so CVE facts come from secondary pages and should be re-read on nvd.nist.gov in a browser before submission.
+
+| Reference | Result | Corrections to the docs |
+|---|---|---|
+| CVE-2013-4787 (Master Key) | VERIFIED. Android 1.6 to 4.2 does not properly check APK signatures; duplicate ZIP entry names, one checked, the other installed. Researcher Jeff Forristal, Bluebox Security; Bluebox blog "Bluebox uncovers Android Master Key". | Docs say "disclosed July 2013": consistent with Bluebox disclosure, month not independently confirmed here. |
+| CVE-2017-13156 (Janus) | VERIFIED. A file can be a valid APK and a valid DEX at once; JAR (v1) signing ignores extra bytes; affects Android 5.0+ with v1-only signed apps; v2 signed apps on 7.0+ protected. Found by GuardSquare, reported to Google July 2017. | **Fix**: GuardSquare's disclosure blog is dated 13 Nov 2017; the Android patch was the **December 2017** security bulletin. The docs say "disclosed December 2017"; change to "disclosed November 2017, patched December 2017". |
+| CVE-2022-30190 (Follina) | VERIFIED. MSDT remote code execution reached through a calling application (Word) via the ms-msdt URL protocol; CVSS 3 base 7.8; first public report by Nao Sec; fixed in June 2022 Microsoft updates. | None. |
+| Fifield, "A better zip bomb", WOOT '19 | VERIFIED. 13th USENIX Workshop on Offensive Technologies, Santa Clara, August 2019 (Best Paper); non-recursive overlapping-file bomb; usenix.org/conference/woot19/presentation/fifield. | The bamsoftware.com page could not be fetched (certificate error); use the USENIX URL as the primary citation. |
+| Zip Slip, Snyk | VERIFIED. Snyk Security team, public disclosure 5 June 2018 (timeline starts 15 April 2018). | No individual author. |
+| Didier Stevens PDF tools (pdfid, pdf-parser) | VERIFIED page exists and describes both tools. | None. |
+| MIRAGE-2019 | VERIFIED. Aceto, Ciuonzo, Montieri, Persico, Pescape, "MIRAGE: Mobile-app Traffic Capture and Ground-truth Creation", ICCCS 2019, University of Naples; 40 apps, 16 categories, captured May 2017 to May 2019; license CC BY-NC-ND 4.0; page traffic.comics.unina.it/mirage/mirage-2019.html. | The paper reports 40 apps, **3 devices**; the public download used here has 20 apps on **2 devices** (already stated in inference PAPER-RESULTS). |
+| Drebin | VERIFIED. Arp, Spreitzenbarth, Huebner, Gascon, Rieck, NDSS 2014; 123,453 apps and 5,560 malware; 94% detection. | None. The 15,036-app CSV used here is the smaller third-party feature file (already stated). |
+| UNSW-NB15 | VERIFIED. Moustafa and Slay, MilCIS 2015 (IEEE); IXIA PerfectStorm in the ACCS Cyber Range Lab; 49 features; UNSW states the data mixes real modern normal traffic with synthesized attacks; free for academic research, commercial use to be agreed with the authors; IEEE DataPort DOI 10.21227/8vf7-s525. | The inference doc calls it a "2015 lab network": fine; note normal traffic is described by UNSW as real, so the dttl artifact is a generator artifact of the combined capture, not a claim about all its normal traffic. |
+
+## Not verified in this pass
+- source.android.com pages (virtualization, APK signing, dex format) and eicar.org: not fetched; they are standard documentation URLs but confirm they resolve and note the access date.
+- AVF, pKVM, Microdroid, Anception, GrapheneOS, Island and Shelter related-work references: none were listed in the docs, so none were checked. The papers session must source these itself.
+- Elsevier PDF set, XGBoost, SHAP and scikit-learn citations: not checked.

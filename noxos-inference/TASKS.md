@@ -427,3 +427,9 @@ Same algorithm applies to both `OnDeviceNetworkClassifier` (student model) and `
 - Old teacher/student releases lacked per-node cover, so TreeSHAP gave NaN and the server returned the generic fallback. Server now returns `reasoning: null` when cover is missing (teacher-server b06fc49, tests added).
 - Re-published teacher-latest v1791623224 (CI 38039833310) and student-latest v1791623396 (CI 38040268937): cover on every node, top-level feature_scale. Metrics unchanged. Local server run confirmed real reasoning. New server binary sha256 38bec4fc...dfc0.
 - On-device parser must ignore unknown fields (feature_scale, per-node cover) and compare splits in float32.
+
+## UDP threshold recalibration (2026-10-11)
+- Warden v3.2.0 on Cuttlefish flagged 15/15 fresh UDP destinations (4 real DNS, errors 0.14-0.27 vs 0.125). Root agent relayed user approval for a model-only recalibration; no tuning to those flows.
+- Rule: UDP threshold = 99th percentile of pooled out-of-fold MIRAGE UDP error, apps weighted equally. 0.125071 -> 0.429368, TCP 0.322667 unchanged. Leave-split-out UDP false flags 5.9% (0.3-19.4%) -> 2.2% (0-5.1%); UDP flood 98.1% -> 94.6% (86.3-99.3%); DNS-like proxy flows flagged 14.3% -> 6.1%.
+- Published autoencoder-latest and autoencoder-1791661543, sha256 ba13d20e3f118b6247a5b5d9c11162b30b7b148204dc14c7d5d8e3cd7b218950, commit 07ebe25 on filter-autoencoder. Contract unchanged; golden UDP vector now not flagged.
+- Open: F1 unmeasured; real DNS absent from MIRAGE; retrain on Warden-logged traffic is the real fix.

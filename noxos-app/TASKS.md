@@ -466,3 +466,7 @@ A `feature/on-device-xgboost-classifier` branch was briefly created in this repo
 ### v3.2.0 RELEASED (2026-10-11)
 
 Commit `79262e7`, https://github.com/parrothacker1/noxos-app/releases/tag/v3.2.0, payload v1.0.5, device-tested. Paper-ready numbers, caveats and unmeasured items are in `PAPER-RESULTS.md` (this folder). Headline: all 4 batch files scanned, own APK no longer self-flags, permissions reach /analyze/file (mock), every fresh UDP destination flagged by the autoencoder (15/15 on tiny test flows).
+
+### 2026-10-11 follow-up
+
+New UDP threshold (0.429368) verified on device; isolation/timing/privilege evidence and four open issues are in `PAPER-RESULTS.md` (Addendum 2026-10-11). Test fixture commit `97492a4`.

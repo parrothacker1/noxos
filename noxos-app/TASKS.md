@@ -470,3 +470,7 @@ Commit `79262e7`, https://github.com/parrothacker1/noxos-app/releases/tag/v3.2.0
 ### 2026-10-11 follow-up
 
 New UDP threshold (0.429368) verified on device; isolation/timing/privilege evidence and four open issues are in `PAPER-RESULTS.md` (Addendum 2026-10-11). Test fixture commit `97492a4`.
+
+### v3.2.1 RELEASED (2026-10-11)
+
+https://github.com/parrothacker1/noxos-app/releases/tag/v3.2.1 (tag 76471dd, CI 38083045655). Fixes the oversize-quarantine OOM crash and the leaked scan VM instance directories; device-verified; before/after in PAPER-RESULTS.md (v3.2.1 section).

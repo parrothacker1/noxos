@@ -462,3 +462,7 @@ Categories in model order `FIN, CON, INT, REQ, RST, ECO, other` (always read fro
 ## No working branch here
 
 A `feature/on-device-xgboost-classifier` branch was briefly created in this repo, then deleted — the user corrected this: that work belongs in `noxos-inference` (see its `TASKS.md`), not here, since the on-device Kotlin consumer (`OnDeviceNetworkClassifier`, already built and merged, `56ff09d`) doesn't need its own branch — what's still unbuilt is the model-export step, which is a `noxos-inference`-side concern.
+
+### v3.2.0 RELEASED (2026-10-11)
+
+Commit `79262e7`, https://github.com/parrothacker1/noxos-app/releases/tag/v3.2.0, payload v1.0.5, device-tested. Paper-ready numbers, caveats and unmeasured items are in `PAPER-RESULTS.md` (this folder). Headline: all 4 batch files scanned, own APK no longer self-flags, permissions reach /analyze/file (mock), every fresh UDP destination flagged by the autoencoder (15/15 on tiny test flows).

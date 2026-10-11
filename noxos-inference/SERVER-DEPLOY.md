@@ -20,7 +20,7 @@ Two behaviours to know: a model with no per-node cover returns `reasoning: null`
 Files in `~/noxos-artifacts/live-check/` (outside git): `token` (chmod 600, random 64 hex, never printed or committed), `start.sh [bind-address]` (defaults to the docker0 address, refuses to start if docker0 is down), `stop.sh`, `server.pid`, `server.log`, `endpoint.txt`, saved responses.
 
 - Start: `~/noxos-artifacts/live-check/start.sh` (docker bridge) or `... start.sh 127.0.0.1` (host only). Stop: `~/noxos-artifacts/live-check/stop.sh`.
-- The Cuttlefish host container (`cuttlefish_orchestrator`, `docker run` in `noxos-os/CUTTLEFISH.md`) uses default bridge networking, so the guest reaches the laptop through the container at the docker0 gateway, normally `http://172.17.0.1:8080`. This needs the docker daemon, which needs root to start, so reachability from inside the container is **unverified** until the daemon is up.
+- The Cuttlefish host container (`cuttlefish_orchestrator`, `docker run` in `noxos-os/CUTTLEFISH.md`) uses default bridge networking, so the guest reaches the laptop through the container at the docker0 gateway, normally `http://172.17.0.1:8080`. Confirmed 2026-10-11: from inside `cuttlefish_orchestrator` (eth0 172.17.0.2, default route via 172.17.0.1), `curl http://172.17.0.1:8080/health` works, an unauthenticated analyze call gets 401 and an authenticated `/analyze/network` returns the TreeSHAP sentence (`guest_*.json` in live-check). `http://10.0.2.2:8080` does not work from the container (that address is the Android emulator-style alias, not present here). The server is bound to 172.17.0.1 only, not wlan0. A restarted container has no running CVD device; the guest hop (guest -> CVD NAT -> container -> 172.17.0.1) is unverified until a device is launched.
 - Loopback verification run against the published models (teacher v1791623224, file v1790706350): `/health` ok; no token and wrong token both 401 on both analyze endpoints; `/analyze/network` returns a TreeSHAP sentence ("blocked - handshake_latency_millis (30), smean (1333.3), duration_millis (20000) pushed this toward attack-like" for a big-upload shape, "allowed - ..." for a small normal flow); `/analyze/file` returns `advisory: true` with the "advisory only (permission-based model trained on 2012-era apps, do not use this to block)" prefix.
 
 ## Path B: cloud (on-demand EC2, stopped)
@@ -32,6 +32,7 @@ Files in `~/noxos-artifacts/live-check/` (outside git): `token` (chmod 600, rand
 | item | status |
 |---|---|
 | current binary + current published models, loopback, auth, TreeSHAP, advisory file path | verified 2026-10-11 on the laptop |
-| reachable from the Cuttlefish guest | not yet verified (docker daemon down at the time) |
+| reachable from the Cuttlefish container to the host server (172.17.0.1:8080) | verified 2026-10-11 (health, 401, authenticated TreeSHAP) |
+| reachable from inside the Android guest itself | not verified: no CVD device was running |
 | cloud deploy of the current binary | not verified; older binary only |
 | any traffic from a real Warden session | none |

@@ -436,4 +436,4 @@ Same algorithm applies to both `OnDeviceNetworkClassifier` (student model) and `
 
 ## Local live-endpoint check (2026-10-11)
 - User decision: no AWS for the live check. teacher-server (cb50ad0, adds NOXOS_BIND_ADDRESS) runs on the laptop with teacher-latest v1791623224 and file-latest v1790706350; bearer token in ~/noxos-artifacts/live-check/token (chmod 600). Loopback checks passed (see SERVER-DEPLOY.md).
-- Blocked: the docker daemon is down and needs root, so docker0 does not exist and container reachability is unverified. Once started, run live-check/start.sh without arguments to bind docker0.
+- Docker started by the user; container reachability to http://172.17.0.1:8080 verified from inside cuttlefish_orchestrator. Android guest hop unverified (no CVD device running).

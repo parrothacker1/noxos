@@ -36,6 +36,6 @@ Update 2026-10-11: the user approved Bundle A (items 1-10), released as Warden v
 ## Housekeeping (user)
 22. Retroactive GPG signing of unsigned commits (each repo's TASKS.md logs them).
 23. Two old unattached EBS volumes (400 GB, 620 GB) may still bill; IAM gap for `ec2:ModifyInstanceAttribute`.
-24. The ACL screenshots (`scr_acl.png`, `scr_acl_teacher_detail.png`) need the API key typed in the app by the user; optional for the paper.
+24. The ACL screenshots (`scr_acl.png`, `scr_acl_teacher_detail.png`) need the API key typed in the app by the user; optional for the paper. **DONE 2026-10-11: the user permitted reading the key; both screenshots captured on v3.3.2 (key typed from a temporary device file, removed, app data cleared afterwards).**
 25. Verify the three NVD pages in a browser before submission; fill the paper placeholders (authors, affiliation, guide, venue, page limit).
 26. Push `context` (several local commits) when wanted.

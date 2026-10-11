@@ -474,3 +474,7 @@ New UDP threshold (0.429368) verified on device; isolation/timing/privilege evid
 ### v3.2.1 RELEASED (2026-10-11)
 
 https://github.com/parrothacker1/noxos-app/releases/tag/v3.2.1 (tag 76471dd, CI 38083045655). Fixes the oversize-quarantine OOM crash and the leaked scan VM instance directories; device-verified; before/after in PAPER-RESULTS.md (v3.2.1 section).
+
+### v3.3.0 in the tree, NOT released (2026-10-11)
+
+Commit `4eea282`, CI 38127179812 green: payload v1.0.6 synced, stale-row rescoring, scan-VM queue (max 2). Waiting on the device pass; details, the checklist, and the rc-tag decision are in `PAPER-RESULTS.md` (section "v3.3.0 work in the tree"). Do not tag until the user confirms in the Warden session.

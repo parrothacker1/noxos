@@ -1,6 +1,6 @@
 # noxos-payload — paper-ready results (file-scan side)
 
-Evaluated commit: `noxos-payload` `2b94021` (2026-10-11), the code intended for payload **v1.0.6**. v1.0.5 was released from `feab206`; **v1.0.6 has not been built or released, so its binary size is unmeasured**. All numbers below were produced on `2b94021` unless a row says otherwise. "Unmeasured" means exactly that: not measured, not estimated.
+Evaluated commit: `noxos-payload` `2b94021` (2026-10-11), the code of payload **v1.0.6**. v1.0.6 was released from `88b9a47`, which differs from `2b94021` by a README-only change (10 inserted lines, verified with `git diff --stat 2b94021 88b9a47`), so the code evaluated is the code released. Release: `https://github.com/parrothacker1/noxos-payload/releases/tag/v1.0.6` (workflow run 38125999007, spot r5a.2xlarge). Binary sizes: x86_64 366,040 B (sha256 c5bc822429d5d3d4b9406f019d3890f085fd790de68dc16ff8d951b027f1c0b0), arm64-v8a 366,272 B (sha256 ffc4b38a29f489fbdd492d457fa265b1bf6a50cf3dfb66568c2ce23df614c684); NEEDED only libvm_payload/libc/libm/libdl, `AVmPayload_main` exported, 0 hits for EICAR-STANDARD and com.metasploit.stage. v1.0.5 (from `feab206`) was 267,376 / 267,552 B. All numbers below were produced on `2b94021` unless a row says otherwise. "Unmeasured" means exactly that: not measured, not estimated.
 
 ## 0. What is and is not claimed
 
@@ -241,7 +241,7 @@ clang++ -std=c++17 -g -O1 -fsanitize=fuzzer,address,undefined -fno-sanitize-reco
 mkdir -p corpus && cp fuzz/seeds_zip/* corpus/ && ./zip_fuzzer corpus -max_total_time=60 -max_len=65536
 ```
 
-Release artifacts: `https://github.com/parrothacker1/noxos-payload/releases/tag/v1.0.5` (built from `feab206`; v1.0.6, intended to be built from `2b94021`, does not exist yet). Commit history for the file-scan work: `a56c29f` (ZIP/APK, network code removed, 150 MiB cap), `92f34c1` (fail-open, task 2, encrypted ZIP, PDF, OOXML), `c1ba94b` (permission names), `6f777a6` (images), `2b94021` (self-detection and PDF fixes).
+Release artifacts: `https://github.com/parrothacker1/noxos-payload/releases/tag/v1.0.5` (built from `feab206`); v1.0.6 is released at `https://github.com/parrothacker1/noxos-payload/releases/tag/v1.0.6` (built from `88b9a47`, code identical to `2b94021`). Commit history for the file-scan work: `a56c29f` (ZIP/APK, network code removed, 150 MiB cap), `92f34c1` (fail-open, task 2, encrypted ZIP, PDF, OOXML), `c1ba94b` (permission names), `6f777a6` (images), `2b94021` (self-detection and PDF fixes).
 
 ## 9. References
 

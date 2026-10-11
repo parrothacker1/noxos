@@ -22,7 +22,7 @@ Host (Warden app)                           Microdroid VM (AVF, one-shot, per fi
 
 - **Isolation boundary:** AVF/Microdroid VM created by the app per scan (`MicrodroidVmSession`); the file parser never runs in the app process. The guest holds only the bytes of the file being scanned.
 - **Platform scope (project's stated boundary):** development and testing on a **Cuttlefish** virtual device (`cvd-1`), **non-protected** VM (`setProtectedVm(false)`): **no hardware root of trust**. Protected pKVM needs Pixel 6+ hardware and is out of scope. The isolation guarantee measured here is therefore AVF's software VM boundary, not a hardware-backed one. Escape resistance of the VM boundary itself was **not tested**.
-- **VM resources:** the app does not set a memory size, so the VM runs at the AVF default. The captured crosvm launch line on `cvd-1` shows `--mem 256` (256 MiB) and 1 vCPU.
+- **VM resources:** Warden sets the VM memory to 512 MiB since commit `0614c4e` (2026-09-29); until then the AVF default of 256 MiB applied, and the earlier captured crosvm line showed `--mem 256`. The current crosvm line (Warden v3.2.0 onwards) shows `--cpus num-cores=1 --mem 512` and the VM is non-protected. Source: noxos-app/PAPER-RESULTS.md section B2.
 - **Guest binary:** one shared library, `libnoxos_payload_stub.so`, Soong-built (`cc_library_shared`) with the C++ runtime and zlib **statically linked** (`stl: "libc++_static"`, `static_libs: ["libz"]`). Static linking is deliberate: Microdroid's restricted linker namespace does not provide `libc++.so`, and a dynamic dependency caused the project's long-running `exit=1` failure (every payload build before v1.0.3 failed to `dlopen` on the device; fixed in v1.0.3). v1.0.5 artifacts: `x86_64` **267,376 B**, `arm64-v8a` **267,552 B** (v1.0.4: 267,320 / 267,496 B). `readelf -d` NEEDED on v1.0.5, both ABIs: only `libvm_payload.so`, `libc.so`, `libm.so`, `libdl.so`; no `libz.so`, no `libc++.so` (verified by the build session, 2026-10-10).
 - **Wire contract** (vsock port 5000, one request per VM): host→guest `[u8 task][u32 BE length][payload]`; guest→host `[u32 BE length][u8 status][UTF-8 JSON]`.
   - Task 0: payload = raw file bytes (≤ 150 MiB = 157,286,400 B).
@@ -149,7 +149,7 @@ Method: every matching file found on one developer workstation, scanned through 
 
 ### 4.1 APKs (21 real APK files; several are byte-identical copies)
 
-- Clean (9): Warden v3.0.0, **v3.2.0 and v3.2.1 (the current release)**, v2.2.1–v2.2.4 builds, the Warden check build, and the AOSP `MicrodroidDemoApp`.
+- Clean (9): Warden v3.0.0, **v3.2.0, v3.2.1, v3.3.0 and v3.3.1 (v3.3.1 is the current release)**, v2.2.1–v2.2.4 builds, the Warden check build, and the AOSP `MicrodroidDemoApp`.
 - 11 flagged `signed with the Android debug certificate`: 9 Warden debug/early builds and the 2 Playwright test-driver APKs. Ground truth is provenance (debug builds by name and origin), not independent `apksigner` verification (unmeasured). All 11 also report `apk_debuggable: true`, the only APKs that do, which is an independent cross-check of the manifest parser.
 - 1 flagged `contains EICAR antivirus test string`: **`app-release-v3.1.0.apk`**, which bundles payload v1.0.4 with plaintext signatures (see 3.3). **Warden v3.2.0 and v3.2.1 do not self-flag**: their bundled `libnoxos_payload_stub.so` files (v3.2.1: 267,552 B arm64-v8a, 267,376 B x86_64, the v1.0.5 sizes) contain no plaintext signature string.
 - The new manifest rules (privileged shared UID; target SDK <23 with ≥2 high-risk permissions) flag **zero** real APKs. Real values: Warden targetSdk 35 / minSdk 33; MicrodroidDemoApp 33/33; Playwright driver 29/21; dex counts 1–9 as expected.
@@ -204,7 +204,7 @@ Measured on the workstation above, `-O2`, `ScanFile` call only (excludes reading
 | 150 MiB random ELF (worst case for the entropy pass) | 157.3 MB | 107.0 ms | 259.8 MB |
 | 150 MiB zeros (untyped) | 157.3 MB | 33.1 ms | 259.8 MB |
 
-Notes: (1) peak RSS comes from a harness that reads the file through a growing buffer, so it is *larger* than a guest that receives the length first and allocates once (hence identical values for three different large inputs: buffer doubling to 128 MiB); scan overhead beyond the read is a few MB, except gzip, which adds its 8 MiB inspect buffer and a 64 KiB chunk. (2) These are desktop-CPU times; **in-guest time on a 1-vCPU Microdroid VM, vsock transfer time, and VM boot time for these builds are unmeasured.** The only guest timing available is the 2026-09-22 v1.0.3 log (payload entered 1.382 s after guest boot). (3) **Whether a 150 MiB file fits in the default 256 MiB guest alongside the guest OS is unmeasured.** A guest out-of-memory would surface as a payload exit (fail-closed), not silent truncation.
+Notes: (1) peak RSS comes from a harness that reads the file through a growing buffer, so it is *larger* than a guest that receives the length first and allocates once (hence identical values for three different large inputs: buffer doubling to 128 MiB); scan overhead beyond the read is a few MB, except gzip, which adds its 8 MiB inspect buffer and a 64 KiB chunk. (2) These are desktop-CPU times; **in-guest time on a 1-vCPU Microdroid VM, vsock transfer time, and VM boot time for these builds are unmeasured.** The only guest timing available is the 2026-09-22 v1.0.3 log (payload entered 1.382 s after guest boot). (3) **Whether a 150 MiB file fits in the 512 MiB guest (256 MiB before 2026-09-29) alongside the guest OS is unmeasured.** A guest out-of-memory would surface as a payload exit (fail-closed), not silent truncation.
 
 Threshold provenance: the entropy threshold of 7.2 bits/byte was chosen from local measurement: all `classes*.dex` files examined during development (about 13 files across 4 APKs) measured 5.05–6.73 bits/byte, random data ≈ 7.99. That set is small; the threshold is hand-picked.
 
@@ -224,7 +224,7 @@ Threshold provenance: the entropy threshold of 7.2 bits/byte was chosen from loc
 12. **The declared-name/MIME check (task 2) is implemented but not yet used by the app** (to the author's knowledge). v1.0.4–v1.0.6 are not validated on a device.
 13. **False-flag evidence is one workstation, mostly developer artifacts**, not a representative file population; counts, not rates, are the honest statement. Several test-fixture directories (Go, Python, Playwright) over-represent deliberately broken files.
 14. **Published v1.0.4 flags APKs that embed it (including Warden v3.1.0)**; fixed in v1.0.5 and later.
-15. **Guest memory:** 150 MiB payload cap vs the default 256 MiB guest is unverified.
+15. **Guest memory:** 150 MiB payload cap vs the 512 MiB guest (Warden, since 2026-09-29) is unverified for a file that large.
 16. **Privacy:** EXIF values returned in status-0 JSON are personal data; redaction before any server upload is the host's responsibility and is not implemented in the guest. The shared-user-ID value and package identity are deliberately not emitted.
 
 ## 7. Backlog not started

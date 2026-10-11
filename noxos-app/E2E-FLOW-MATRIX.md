@@ -27,7 +27,7 @@ Environment limits to state in the paper: Cuttlefish with nested virtualization,
 | N17 | Autoencoder model download: ok / sha256 mismatch / network failure | ok loads; mismatch and failure fall back safely (record behaviour) |
 | N18 | Model version change at runtime | session-only autoencoder verdicts cleared and destinations re-evaluated; user overrides untouched |
 | N19 | Stale persisted FLAGGED rows at monitoring start | cleared and re-evaluated |
-| N20 | Non-TCP/UDP or IPv6 traffic | not scored, passes (fail-open as designed) |
+| N20 | Non-TCP/UDP or IPv6 traffic | not scored. The relay's scope is IPv4 TCP/UDP by design: ICMP and other protocols are not relayed (dropped), each logged as a flagged "not relayed" audit row with a notification; IPv6 packets are skipped. IPv6 is untestable when the guest has no IPv6 (NOT RUN). (Corrected 2026-10-11: the first version of this row said "passes", which was wrong.) |
 | N21 | Teacher reasoning | TreeSHAP sentence references the sent feature values (not the defaults sentence seen on v3.3.0) |
 
 ## B. File path (arrival -> VM -> verdict -> quarantine)

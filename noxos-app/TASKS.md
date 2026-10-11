@@ -478,3 +478,12 @@ https://github.com/parrothacker1/noxos-app/releases/tag/v3.2.1 (tag 76471dd, CI 
 ### v3.3.0 in the tree, NOT released (2026-10-11)
 
 Commit `4eea282`, CI 38127179812 green: payload v1.0.6 synced, stale-row rescoring, scan-VM queue (max 2). Waiting on the device pass; details, the checklist, and the rc-tag decision are in `PAPER-RESULTS.md` (section "v3.3.0 work in the tree"). Do not tag until the user confirms in the Warden session.
+
+
+### v3.3.0 and v3.3.1 RELEASED, E2E matrix complete (2026-10-11)
+
+- v3.3.0: https://github.com/parrothacker1/noxos-app/releases/tag/v3.3.0 (tag `4eea282`, CI 38127179812, APK sha256 19e32fd2…c104). Payload v1.0.6 synced by hand, stale-row rescoring, 2-VM scan queue. The earlier "v3.3.0 NOT released" note above is obsolete.
+- v3.3.1: https://github.com/parrothacker1/noxos-app/releases/tag/v3.3.1 (tag `7cf370a`, CI 38133902624, APK sha256 204d9cce…17a6). Fixes the `/analyze/network` request: the ten live flow features are sent, only a 200 "allow" allows, uncertain/422/400/401 are held for the user, 503/timeout/no connection stay blocked and are retried.
+- All 44 matrix rows (N1–N21, F1–F19, P1–P4) are in `PAPER-RESULTS.md` under "E2E matrix": 41 PASS, 1 DEVIATION (N20 ICMP, documented limitation), 2 NOT RUN (F9 trusted source, F15 malformed guest frame), 0 FAIL, no open defects.
+- To resume or repeat on the device: Docker up, `docker start cuttlefish_orchestrator`, `cvd stop` + `cvd start` in it, `adb install -r` the release APK, `appops set com.noxos.app ACTIVATE_VPN allow`, Settings endpoint + key (key typed from a temporary device file, never in a command line). The logging proxy is `proxy.py` in the session job dir (`pctl.sh start|mode|log|clear`); the live server is the laptop's `teacher-server` on `172.17.0.1:8080` with its token in `~/noxos-artifacts/live-check/token`. The session job dir scripts (`h.sh`, `a.sh`, `coldloop.sh`, `stats.py`, `coldstats.py`) are not durable; recreate from `PAPER-RESULTS.md` if lost.
+- Not measured and not claimed: battery, real-phone timings, pKVM, detection rates, cloud deployment, IPv6.

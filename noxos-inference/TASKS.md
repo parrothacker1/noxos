@@ -433,3 +433,7 @@ Same algorithm applies to both `OnDeviceNetworkClassifier` (student model) and `
 - Rule: UDP threshold = 99th percentile of pooled out-of-fold MIRAGE UDP error, apps weighted equally. 0.125071 -> 0.429368, TCP 0.322667 unchanged. Leave-split-out UDP false flags 5.9% (0.3-19.4%) -> 2.2% (0-5.1%); UDP flood 98.1% -> 94.6% (86.3-99.3%); DNS-like proxy flows flagged 14.3% -> 6.1%.
 - Published autoencoder-latest and autoencoder-1791661543, sha256 ba13d20e3f118b6247a5b5d9c11162b30b7b148204dc14c7d5d8e3cd7b218950, commit 07ebe25 on filter-autoencoder. Contract unchanged; golden UDP vector now not flagged.
 - Open: F1 unmeasured; real DNS absent from MIRAGE; retrain on Warden-logged traffic is the real fix.
+
+## Local live-endpoint check (2026-10-11)
+- User decision: no AWS for the live check. teacher-server (cb50ad0, adds NOXOS_BIND_ADDRESS) runs on the laptop with teacher-latest v1791623224 and file-latest v1790706350; bearer token in ~/noxos-artifacts/live-check/token (chmod 600). Loopback checks passed (see SERVER-DEPLOY.md).
+- Blocked: the docker daemon is down and needs root, so docker0 does not exist and container reachability is unverified. Once started, run live-check/start.sh without arguments to bind docker0.

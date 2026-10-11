@@ -374,6 +374,17 @@ Both task types are dispatched through the *same* `libnoxos_payload_stub.so` / `
 
 **Real, tested today (`noxos-app` side, CI-green, commits `56ff09d` and `bcfda8e`)**: `VmPayloadProtocolTest` covers both task-type byte values and the multi-packet framing (`encodePacketSamples`) encode correctly; `TriggerRouterTest` covers the file-scan `cheap_filter_flagged` response path end-to-end against a fake transport; `NetworkSampleVmDispatcherTest` covers the network-sample response parsing (clean/flagged/malformed-status/thrown-exception, plus that both an outbound and inbound sample land in one request) all against a fake `VmSession`/`VmTransport` — no real VM involved, same as every other VM-touching test in `noxos-app`, since real Microdroid I/O is still Phase-2-gated. None of this exercises a real payload binary — it's the host side of the contract, proven against fakes, waiting on this repo to implement the guest side that actually matches it.
 
+## v1.0.6 build (2026-10-11, NoxOS building AWS)
+
+Built from `88b9a47` (final code commit `2b94021`) and published: https://github.com/parrothacker1/noxos-payload/releases/tag/v1.0.6 (release-from-s3 run `38125999007`, prefix `s3://noxos-releases/payload-build/20261011-v106/`). One spot r5a.2xlarge (`i-0890f5df24cc10efb`, us-east-1f; 1a had no spot capacity, fell through to the next subnet), no interruption. x86_64 33 min (07:42-08:15 UTC), arm64-v8a 30 min (08:15-08:45; Soong regeneration alone was ~25 min of that). Instance terminated right after ALL_DONE (08:45), volume auto-deleted, nothing running.
+
+| ABI | bytes | sha256 |
+|---|---|---|
+| x86_64 | 366,040 | `c5bc822429d5d3d4b9406f019d3890f085fd790de68dc16ff8d951b027f1c0b0` |
+| arm64-v8a | 366,272 | `ffc4b38a29f489fbdd492d457fa265b1bf6a50cf3dfb66568c2ce23df614c684` |
+
+Verified on both: NEEDED only `libvm_payload`/`libc`/`libm`/`libdl`; `AVmPayload_main` exported, `AVmPayload_notifyPayloadReady` imported; 0 hits for `EICAR-STANDARD` / `com.metasploit.stage`. Size grew from v1.0.5 (267,376 / 267,552) by ~98 KB. Local copies: `~/noxos-artifacts/payload-v106/`.
+
 ## Backlog
 
 ### File-check ideas and coverage gaps (2026-09-29, session 10, asked for by the root agent for the user; nothing built) — **deferred to next sprint, per the user's explicit call, 2026-09-29**

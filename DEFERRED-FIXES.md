@@ -1,20 +1,20 @@
 # Deferred fixes and open items (2026-10-11)
 
-User decision (2026-10-11): software work is stopped for now. Known issues below are documented, stated in the paper as limitations, and clubbed into one future release (Warden v3.3.2 or later, plus a payload release if payload items are taken). Nothing here is scheduled. Sources: noxos-app/PAPER-RESULTS.md ("E2E matrix", addenda), noxos-payload/PAPER-RESULTS.md, noxos-inference/PAPER-RESULTS.md.
+Update 2026-10-11: the user approved Bundle A (items 1-10), released as Warden v3.3.2 (items 11-26 unchanged). Original note: software work was stopped for now. Known issues below are documented, stated in the paper as limitations, and clubbed into one future release (Warden v3.3.2 or later, plus a payload release if payload items are taken). Nothing here is scheduled. Sources: noxos-app/PAPER-RESULTS.md ("E2E matrix", addenda), noxos-payload/PAPER-RESULTS.md, noxos-inference/PAPER-RESULTS.md.
 
 ## Warden app (noxos-app), copy-only fixes
-1. Home screen text "Untrusted files and flagged traffic run inside a disposable VM, sealed from your device" is wrong on two counts: network traffic no longer enters a VM (network VM task removed 2026-09-29) and "sealed" overstates a non-protected VM.
-2. Quarantine header "Files the scanner found genuinely malformed are held here" is wrong: the list also holds flagged files (EICAR, VBA/XLM macros, SVG script) that are not malformed.
-3. Event detail banner "FLAGGED — SCAN DID NOT COMPLETE CLEANLY" shows for a scan that completed and flagged a macro; it reads like the error path. Step label "Boot sealed VM" has the same "sealed" problem.
+1. Home screen text "Untrusted files and flagged traffic run inside a disposable VM, sealed from your device" is wrong on two counts: network traffic no longer enters a VM (network VM task removed 2026-09-29) and "sealed" overstates a non-protected VM. **FIXED in v3.3.2.**
+2. Quarantine header "Files the scanner found genuinely malformed are held here" is wrong: the list also holds flagged files (EICAR, VBA/XLM macros, SVG script) that are not malformed. **FIXED in v3.3.2.**
+3. Event detail banner "FLAGGED — SCAN DID NOT COMPLETE CLEANLY" shows for a scan that completed and flagged a macro; it reads like the error path. Step label "Boot sealed VM" has the same "sealed" problem. **FIXED in v3.3.2.**
 
 ## Warden app, behaviour
-4. Files that arrive while monitoring is off or starting are not scanned (the watcher only sees files added after it registers; 3 of 20 reboots lost the first file).
-5. F11: the audit row does not say the `/analyze/file` advisory was unavailable when the server is down, unauthorised or unconfigured.
-6. A refused (never completed) connection attempt gets a high autoencoder reconstruction error and is flagged.
-7. Non-first IP fragments of large UDP datagrams show as flagged "udp relay failed" rows on port 0.
-8. ICMP is dropped by design with a flagged "not relayed" row and a notification per ping (N20, documented limitation). Option: pass ICMP through or suppress the alert.
-9. One Start Monitoring after a force-stop logged "auditRepository was null at startMonitor(), stopping" (possible race, not investigated).
-10. "Allowed manually" ACL entry did not appear on one device attempt (unverified, may be a test-state issue).
+4. Files that arrive while monitoring is off or starting are not scanned (the watcher only sees files added after it registers; 3 of 20 reboots lost the first file). **FIXED in v3.3.2 (persisted last-seen time, catch-up bounded to the newest 20 files within 24 h).**
+5. F11: the audit row does not say the `/analyze/file` advisory was unavailable when the server is down, unauthorised or unconfigured. **FIXED in v3.3.2.**
+6. A refused (never completed) connection attempt gets a high autoencoder reconstruction error and is flagged. **FIXED in v3.3.2 (uncompleted TCP connections are not scored or flagged).**
+7. Non-first IP fragments of large UDP datagrams show as flagged "udp relay failed" rows on port 0. **FIXED in v3.3.2.**
+8. ICMP is dropped by design with a flagged "not relayed" row and a notification per ping (N20, documented limitation). Option: pass ICMP through or suppress the alert. **FIXED in v3.3.2 (one audit row per destination, no per-ping notification; ICMP still dropped).**
+9. One Start Monitoring after a force-stop logged "auditRepository was null at startMonitor(), stopping" (possible race, not investigated). **INVESTIGATED and FIXED in v3.3.2 (reproduced: the service started without the activity had null repositories; it now creates its own).**
+10. "Allowed manually" ACL entry did not appear on one device attempt (unverified, may be a test-state issue). **INVESTIGATED in v3.3.2, not a defect (the entry was stored; it sorts to the top while the list stayed scrolled down). No code change.**
 11. BOOTING median is higher on v3.3.1 (1069 ms warm) than the earlier v3.2.0 series (821 ms); cause not isolated. The v1.0.6 guest is slower per file than v1.0.5 (10 MiB: 147 ms vs 55 ms; 43.5 MB APK 423 ms vs 223 ms).
 12. Pinned self-hosted copy of the AVF stub android.jar (CI currently pulls from the Microsoft mirror of AOSP prebuilts).
 13. The "Sync Payload" workflow stays disabled (it auto-cuts a signed release); payload is synced by hand.

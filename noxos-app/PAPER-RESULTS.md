@@ -329,3 +329,48 @@ None open against v3.3.1. Every defect found earlier in the session was fixed an
 - Quarantine copies are not encrypted; the VM instance directory cleanup, the 2-VM cap and the queue are not separately configurable.
 - After a force-stop and relaunch of the app, one Start Monitoring attempt ended with "auditRepository was null at startMonitor(), stopping" in logcat (the service was started without the activity's repositories); monitoring stayed off until the user started it again.
 - The v1.0.6 guest takes longer per file than v1.0.5 (10 MiB: 147 vs 55 ms, 43.7 MB APK: 423 vs 223 ms). Real-phone timings, battery per scan, pKVM on protected hardware, detection rates and cloud deployment were not measured.
+
+
+# Warden v3.3.2 (Bundle A) and re-run of the touched matrix rows (2026-10-11)
+
+Release: https://github.com/parrothacker1/noxos-app/releases/tag/v3.3.2 (tag on `333ed2f`, CI run 38151741726 green; the first commit `2677a9a` failed CI on two test fixtures and was fixed in `333ed2f`). `app-release.apk` sha256 `08e04b3ad86e4d39fc3ac73d9d5d71249aeb347cd521174202e2dd57bf08fc33` (downloaded from the release and compared), versionCode 21, installed on Cuttlefish with `adb install -r`. Payload unchanged (v1.0.6). Unit tests by `@Test` count at the tag: 215 (190 at v3.3.1; counted with `git grep -E -c '^\s*@Test'` over `*.kt`, no parameterized tests).
+
+## What changed (knowledge-graph/DEFERRED-FIXES.md items 1-10)
+
+1. Home text now says new files are scanned in a disposable VM and network traffic is checked by on-device models and an optional server (no "sealed", no "flagged traffic runs in a VM").
+2. Quarantine header: "Files the scanner flagged, or could not safely parse, are held here...".
+3. Event detail banner: a completed scan that flagged something reads "FLAGGED — ISSUE FOUND IN SCAN"; "SCAN DID NOT COMPLETE" only for outcome ERROR; step label "Boot scan VM"; network rows read "RELAYED — CHECKED" and no longer claim a sealed VM.
+4. Catch-up: the last seen file time (MediaStore DATE_ADDED seconds) is persisted (on every accepted file and on stop). When monitoring starts, files added since then are scanned, bounded to the newest 20 files within 24 h; nothing persisted means no catch-up (first install or cleared data). The same trusted-source check and the shared 2-VM semaphore apply. A file added in the same second as the last persisted one is not rescanned (start is persisted+1).
+5. `/analyze/file` advisory unavailable is noted in the audit row ("| Advisory unavailable (server not configured | rejected, HTTP 401 | server error, HTTP 503 | server unreachable | unusable response)"); the verdict, quarantine and scan outcome are unchanged. Toggle off stays silent.
+6. A TCP destination whose connection never completed (no handshake, no inbound data, and a reset or no answer within 12 s) is not scored: its pending ACL row is removed and nothing is flagged. The autoencoder state mapping and inputs are unchanged.
+7. Non-first IP fragments are skipped (no audit row, no ACL entry).
+8. Non-TCP/UDP IPv4 traffic (ICMP): one flagged "not relayed" audit row per protocol and destination per monitoring session, and no per-ping notification. ICMP is still dropped (not relayed).
+9. Investigated and fixed. Reproduced on v3.3.1 with `am force-stop` then `am start-foreground-service` of the monitor service (what a sticky restart after process death does): the static repository fields are set only by the activity, so the service established the tunnel, logged "auditRepository was null at startMonitor(), stopping" and tore it down. The service now creates its own repositories when the activity did not set them (same `AuditModule`/`AclModule`/settings classes), and checks before the tunnel is set up.
+10. Investigated, not a defect. The manual "Allow" entry is stored ("allowed manually", visible on a device attempt twice). New entries sort to the top (updatedAt descending) while the list keeps its scroll position, so the new row was above the visible part; scrolling up shows it. No code change.
+
+## Device re-run on v3.3.2 (platform-signed release build, Cuttlefish)
+
+| Row | Status | Evidence |
+|---|---|---|
+| Item 9 | PASS | `force-stop` then `start-foreground-service`: log shows "tunnel established" and "capture loop started" and no error; the tun device is up. (v3.3.1: "auditRepository was null ... stopping".) |
+| N1 | PASS | 3 fresh TCP destinations (104.18.32.47, 151.101.65.69, 140.82.113.3): all ALLOWED "autoencoder: normal". |
+| N2 | PASS | 3 fresh DNS destinations (208.67.222.222, 9.9.9.9, 4.2.2.1): all "autoencoder: normal"; 0 flagged. |
+| N3 | PASS | 30 MB TCP upload to 93.184.215.14: scored after the flow (error 5.896), BLOCKED session-only "autoencoder: flagged ... escalating to student"; two UDP bursts 2.85 and 1.88 also flagged and BLOCKED. (No endpoint or key configured on this run, so the student/teacher step was not exercised.) |
+| N17 | PASS (mismatch still NOT RUN on device) | Model deleted with airplane mode on: the model came back by itself after the network returned (version 1791661543, same sha256 `ba13d20e...8950`). The offline connection attempt never completed and, per item 6, left no flagged or allowed row (v3.3.1 left it FLAGGED "pending analysis"). A normal flow afterwards was scored "autoencoder: normal". Refused connection (192.168.97.1:1, RST) and blackholed connection (10.255.255.1:81): no ACL row remained and nothing was flagged. |
+| N20 | PASS for the changed behaviour (ICMP is still not relayed) | 2 pings each to 93.184.216.34, 8.8.8.8 and 1.1.1.1: one audit row per destination "ICMP 10.0.0.1 → x / not relayed" (flagged), not one per ping; no ICMP notification (the only "Flagged:" notification was the autoencoder-flagged UDP flow). A fourth ICMP row, to 4.2.2.1, appeared: probably the guest's own ICMP port-unreachable after a late DNS reply, not a ping. IPv6 still NOT RUN (guest has no IPv6). The ACL row for the pinged destination stays FLAGGED "new destination, pending analysis" (unchanged behaviour, not scored). |
+| Item 7 | PASS | Three 5000-byte UDP datagrams to one destination (fragmented on the way out): 0 rows "udp relay failed" and 0 rows on port 0. |
+| F1 (smoke) | PASS | f1_photo.jpg, f1_doc.pdf, f1_plain.zip, f1_valid2.png: "Scan completed, no issues found"; f1_notes.txt: "Unrecognized file type (unknown) — not analyzed, not flagged"; VBA .doc "OLE2 document contains a VBA project (macros)" and EICAR flagged (FAILURE). (The first PNG push, `f1_valid.png`, used the raw fuzz-seed fixture with its one-byte selector and was flagged "named .png but content is unknown": fixture error as before; the stripped fixture scans clean.) |
+| F5 | PASS | App sent HOME; the 7 files above were auto-scanned with audit rows (and notifications). |
+| F6 / F17 | PASS | 4 x 10 MiB in the same second: all SUCCESS; sampled `ps`: at most 2 VMs at once (3 processes), peak total RSS 282 MB (v3.3.1: 331 MB); scan times 1.93, 2.51, 3.24 and 3.92 s (BOOTING 1254/1948/999/1110 ms). |
+| F7 | PASS | 151 MB file: rejected in 3 ms ("File too large (151 MB, max 150 MB)"), quarantined in full (158 400 000 B), removed from Downloads, app PID unchanged (4491), no OutOfMemoryError. |
+| F18 | PASS | 0 VM instance directories after the whole run. |
+| F11 | PASS | APK scan outcome unchanged (SUCCESS, not quarantined, no crash) and the audit row now says why the advisory is missing: no endpoint "Advisory unavailable (server not configured)"; real server with no key "(rejected, HTTP 401)"; connection dropped "(server unreachable)"; server stalled (5 s timeout, scan took 6.4 s) "(server unreachable)". Closes the F11 note. |
+| Item 4 | PASS | While monitoring was off (service stopped), 3 files were pushed (clean PNG, VBA .doc, text): after Start they were scanned (SUCCESS, FAILURE "OLE2 document contains a VBA project (macros)", "not analyzed") with one audit row each; a stop/start cycle did not rescan them; 25 files pushed while off: exactly 20 scanned (fl_06 to fl_25, the newest). Trusted-source: unchanged code path, not testable (see F9). A caveat found while testing: pushing a file whose name already exists in Downloads overwrites the media row instead of adding one, so it is not a new arrival and is not scanned (by design of the watcher). |
+
+Smoke N1-N3, F1, F7, F17-F18, N17, N20, F5, F6, F11: 0 FAIL. No regression versus v3.3.1 found. F9 and F15 remain NOT RUN as before.
+
+Screenshots re-captured into `~/noxos-artifacts/screens/` with the endpoint "Not configured": `scr_audit_detail_file.png` (new banner "FLAGGED — ISSUE FOUND IN SCAN", step "Boot scan VM"), `scr_audit_trail.png` (same composition, text unchanged), `scr_home_monitoring.png` (new home text) and `scr_quarantine.png` (new header). `scr_acl.png` and `scr_acl_teacher_detail.png` still wait for the user (API key).
+
+## Open after v3.3.2
+
+DEFERRED-FIXES items 11-13 (open profiling, hosted AVF stub, disabled Sync Payload workflow) are untouched on purpose. The ICMP user effect is still not measurable on this Cuttlefish network (it passes no ICMP even with monitoring off).

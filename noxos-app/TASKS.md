@@ -487,3 +487,12 @@ Commit `4eea282`, CI 38127179812 green: payload v1.0.6 synced, stale-row rescori
 - All 44 matrix rows (N1–N21, F1–F19, P1–P4) are in `PAPER-RESULTS.md` under "E2E matrix": 41 PASS, 1 DEVIATION (N20 ICMP, documented limitation), 2 NOT RUN (F9 trusted source, F15 malformed guest frame), 0 FAIL, no open defects.
 - To resume or repeat on the device: Docker up, `docker start cuttlefish_orchestrator`, `cvd stop` + `cvd start` in it, `adb install -r` the release APK, `appops set com.noxos.app ACTIVATE_VPN allow`, Settings endpoint + key (key typed from a temporary device file, never in a command line). The logging proxy is `proxy.py` in the session job dir (`pctl.sh start|mode|log|clear`); the live server is the laptop's `teacher-server` on `172.17.0.1:8080` with its token in `~/noxos-artifacts/live-check/token`. The session job dir scripts (`h.sh`, `a.sh`, `coldloop.sh`, `stats.py`, `coldstats.py`) are not durable; recreate from `PAPER-RESULTS.md` if lost.
 - Not measured and not claimed: battery, real-phone timings, pKVM, detection rates, cloud deployment, IPv6.
+
+
+### v3.3.2 RELEASED, Bundle A (2026-10-11)
+
+- https://github.com/parrothacker1/noxos-app/releases/tag/v3.3.2 (tag `333ed2f`, CI 38151741726, APK sha256 `08e04b3a...fc33`, versionCode 21). The first commit `2677a9a` failed CI on two test fixtures and was fixed in `333ed2f`. Payload stays v1.0.6.
+- DEFERRED-FIXES items 1-10 done (9 and 10 investigated; 9 fixed, 10 not a defect). Items 11-13 untouched on purpose.
+- Matrix rows re-run on the device against v3.3.2: item 9, N1-N3, N17, N20, F1, F5, F6/F17, F7, F11, F18, item 4 catch-up, items 6-8: 0 FAIL (details in PAPER-RESULTS.md, "Warden v3.3.2 (Bundle A)"). `@Test` count 215.
+- Screenshots re-captured (`scr_audit_detail_file`, `scr_audit_trail`, `scr_home_monitoring`, `scr_quarantine`); `scr_acl.png` and `scr_acl_teacher_detail.png` still need the user to enter the API key in the app (my attempt to type it was blocked by the permission classifier).
+- Device left on v3.3.2, app data cleared (fresh state, Light theme, endpoint and key "Not configured", monitoring on); animation scales set to 0; the logging proxy is still running in the Cuttlefish container.

@@ -437,3 +437,6 @@ Same algorithm applies to both `OnDeviceNetworkClassifier` (student model) and `
 ## Local live-endpoint check (2026-10-11)
 - User decision: no AWS for the live check. teacher-server (cb50ad0, adds NOXOS_BIND_ADDRESS) runs on the laptop with teacher-latest v1791623224 and file-latest v1790706350; bearer token in ~/noxos-artifacts/live-check/token (chmod 600). Loopback checks passed (see SERVER-DEPLOY.md).
 - Docker started by the user; container reachability to http://172.17.0.1:8080 verified from inside cuttlefish_orchestrator. Android guest hop unverified (no CVD device running).
+
+## Missing-feature guard on /analyze/network (2026-10-11)
+- Warden v3.3.0 live test sent no flow stats; server scored defaults and allowed. Fixed in teacher-server 90dd840: 422 with `missing`/`invalid`, no verdict; smean/dmean derived, handshake defaults to 0. Contract: ML-NETWORK-REQUEST-CONTRACT.md. The on-device student's feature map already has all 10 names; Warden must send it with proto as a string.

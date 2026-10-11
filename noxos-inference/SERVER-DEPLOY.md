@@ -13,7 +13,7 @@ Single static Go binary (`teacher-server` branch, release `teacher-server-latest
 | `NOXOS_BIND_ADDRESS` | listen on one interface only (added in cb50ad0); empty means all interfaces |
 | `NOXOS_RELOAD_INTERVAL_SECONDS` | default 300 |
 
-Two behaviours to know: a model with no per-node cover returns `reasoning: null` instead of a made-up sentence; split comparisons are float32.
+`/analyze/network` returns 422 (no verdict) when the flow features are missing or invalid, see `ML-NETWORK-REQUEST-CONTRACT.md`. Two other behaviours to know: a model with no per-node cover returns `reasoning: null` instead of a made-up sentence; split comparisons are float32.
 
 ## Path A: local laptop (verified 2026-10-11)
 
@@ -36,3 +36,5 @@ Files in `~/noxos-artifacts/live-check/` (outside git): `token` (chmod 600, rand
 | reachable from inside the Android guest itself | not verified: no CVD device was running |
 | cloud deploy of the current binary | not verified; older binary only |
 | any traffic from a real Warden session | none |
+
+Current release binary: `teacher-server-latest`, built from 90dd840, SHA-256 `51318d572420f3de31ef430fce5236fbad971796c575203c019fb01e9a510b8d`. The laptop server runs this binary (verified from inside `cuttlefish_orchestrator`: Warden-v3.3.0-shaped body gets 422, complete flow gets a verdict). The EC2 box, when next started, downloads this binary; that path is still unverified with it.
